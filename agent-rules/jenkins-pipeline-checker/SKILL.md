@@ -11,16 +11,15 @@ Use this skill when a user asks to check Jenkins pipeline status or stage output
 
 ## Prereqs
 
-- `JENKINS_USERNAME` and `JENKINS_API_TOKEN` are already set in the environment.
-- Default `JENKINS_BASE_URL` is `https://jenkins-nonprod.shss.chewy.com`.
+- `JENKINS_BASE_URL`, `JENKINS_USERNAME`, and `JENKINS_API_TOKEN` are already set in the environment.
 - Default `JENKINS_ORG` is `jenkins`.
 
 ## Workflow
 
 1) Confirm required env vars exist. If missing, ask the user for them.
 2) Find the pipeline run:
-   - For Chewy repos, the multibranch job is typically `build-<repo-name>` and the PR job name is `PR-<number>`.
-   - Example Blue Ocean URL: `https://jenkins-nonprod.shss.chewy.com/blue/organizations/jenkins/build-<repo-name>/detail/PR-<number>/<run_id>/pipeline`.
+   - For multibranch repos, the job is typically `build-<repo-name>` and the PR job name is `PR-<number>`.
+   - Example Blue Ocean URL: `https://jenkins.example.com/blue/organizations/jenkins/build-<repo-name>/detail/PR-<number>/<run_id>/pipeline`.
 3) Query the run summary via the Blue Ocean REST API.
 4) List stage nodes and locate the relevant stage (ask if unclear).
 5) Fetch the stage log and summarize:
@@ -36,7 +35,7 @@ Use this skill when a user asks to check Jenkins pipeline status or stage output
 
 ## Best Defaults
 
-- Assume `JENKINS_BASE_URL=https://jenkins-nonprod.shss.chewy.com` and `JENKINS_ORG=jenkins` unless told otherwise.
+- Read `JENKINS_BASE_URL` from the environment and assume `JENKINS_ORG=jenkins` unless told otherwise.
 - For PR runs, use wfapi endpoints first; fall back to `consoleText` if stage logs are empty.
 - When given a Blue Ocean URL, derive the classic job path as `/job/<pipeline>/job/<branch>/ <run_id>/` (e.g., `PR-264`).
 

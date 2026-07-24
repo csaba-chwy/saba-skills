@@ -6,17 +6,17 @@ Use the configured Jira CLI for exact reads and writes. In a restricted sandbox,
 
 ```text
 jira me
-jira issue view AGC-123 --plain
-jira issue view AGC-123 --raw
+jira issue view SHOP-123 --plain
+jira issue view SHOP-123 --raw
 ```
 
-The Chewy configuration normally lives at `/Users/csaba/.config/.jira/.config.yml`. If discovery fails, pass `--config /Users/csaba/.config/.jira/.config.yml` explicitly. Do not rerun `jira init` or overwrite the configuration for a transient error.
+The Jira CLI uses the local configuration selected by the user. If discovery fails, pass that locally configured path explicitly. Do not rerun `jira init` or overwrite the configuration for a transient error.
 
 Before a batch, list the exact scope:
 
 ```text
 jira issue list \
-  --jql 'parent = AGC-98' \
+  --jql 'parent = SHOP-98' \
   --order-by key \
   --reverse \
   --plain \
@@ -31,22 +31,22 @@ Let the CLI add ordering; do not also embed `ORDER BY` inside JQL.
 Prepare a complete multiline body in a temporary file, then replace the description:
 
 ```text
-jira issue edit AGC-123 --no-input < /private/tmp/agc-123-description.md
+jira issue edit SHOP-123 --no-input < /private/tmp/shop-123-description.md
 ```
 
-`jira issue edit` replaces the whole description. Retain current content that still matters and pass only fields intended to change. Do not use `--skip-notify` by default; Chewy Jira can reject notification suppression even when ordinary writes are allowed.
+`jira issue edit` replaces the whole description. Retain current content that still matters and pass only fields intended to change. Do not use `--skip-notify` by default; a Jira instance can reject notification suppression even when ordinary writes are allowed.
 
 Use the smallest intended write as the canary. Do not create a dummy issue or comment solely to test access.
 
 ## Create
 
-Inspect project and issue-type metadata for required fields before creation. For AGC Stories, `Capitalizable` is required and its configured display name works:
+Inspect project and issue-type metadata for required fields before creation. For projects with required custom fields, use the configured display names:
 
 ```text
 jira issue create \
-  -pAGC \
+  -pSHOP \
   -tStory \
-  -PAGC-98 \
+  -PSHOP-98 \
   -s'Concise outcome-oriented summary' \
   --template /private/tmp/issue-description.md \
   --custom 'Capitalizable=Yes' \
@@ -54,18 +54,18 @@ jira issue create \
   --raw
 ```
 
-Create Epics with `jira epic create` and Bugs with `jira issue create -tBug`; verify their actual create screens and required custom fields first. AGC guidance generally treats Epics and maintenance/Bugs as non-capitalizable, but confirm the field value appropriate to the work.
+Create Epics with `jira epic create` and Bugs with `jira issue create -tBug`; verify their actual create screens and required custom fields first.
 
 If creation returns HTTP 400, search for the exact summary before retrying. Capture the key from a successful response and immediately read the issue back.
 
 ## Parents, links, and workflow
 
 ```text
-jira issue edit AGC-123 --parent AGC-98 --no-input
-jira epic remove AGC-123
-jira issue link AGC-100 AGC-123 Blocks
-jira issue unlink AGC-100 AGC-123
-jira issue move AGC-123 "In Progress"
+jira issue edit SHOP-123 --parent SHOP-98 --no-input
+jira epic remove SHOP-123
+jira issue link SHOP-100 SHOP-123 Blocks
+jira issue unlink SHOP-100 SHOP-123
+jira issue move SHOP-123 "In Progress"
 ```
 
 Confirm link direction in the raw readback. Do not use an empty `--parent` to clear a parent. Transition only to the exact authorized workflow status; do not silently substitute a terminal state.
@@ -75,8 +75,8 @@ Confirm link direction in the raw readback. Do not use an empty `--parent` to cl
 After every write:
 
 ```text
-jira issue view AGC-123 --plain
-jira issue view AGC-123 --raw
+jira issue view SHOP-123 --plain
+jira issue view SHOP-123 --raw
 ```
 
 Verify the complete description plus key, summary, type, status, parent, assignee, required fields, links, and comments. Treat command exit status plus read-back as authoritative.

@@ -8,16 +8,16 @@ The agent will realize you're trying to fiddle with Jenkins builds, match to thi
 
 # Prerequisites
 
-Obviously, you need to be in the office or on SDP - otherwise the agent can't reach Jenkins.
+The agent must have network access to the configured Jenkins instance.
 
 Set up your API key as follows:
 
-1. Go to the Jenkins "security" page, e.g. https://jenkins-nonprod.shss.chewy.com/user/ssachs@chewy.com/security/.
+1. Go to the Jenkins "security" page, for example `https://jenkins.example.com/user/your-name@gmail.com/security/`.
 2. Click "Add new token"
 3. Give the token a descriptive name like "Codex", and copy it down somewhere safe.
 4. Export your username and token to your environment:
 
 ```
-export JENKINS_USERNAME="myemail@chewy.com"
+export JENKINS_USERNAME="myname@gmail.com"
 export JENKINS_API_TOKEN="foobar"
 ```

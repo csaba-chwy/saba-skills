@@ -33,7 +33,7 @@ Default to a 40–70 word Description, one useful link, and three brief acceptan
 
 ## Relevant Links
 
-- [Primary context](https://example.atlassian.net/browse/ABC-123)
+- [Primary context](https://jira.example.com/browse/SHOP-123)
 
 ## Acceptance Criteria
 

@@ -43,7 +43,7 @@ description: "Read, search, summarize, create, update, and groom Jira Epics, Sto
 - Keep dependent lookups sequential when an earlier response determines later targets. Never parallelize Jira writes or their read-back verification; preserve the canary-and-verify sequence.
 - Prefer the configured `jira` CLI for exact Jira reads and all writes. Do not use a browser when the CLI or connector can perform the action.
 - Search for overlapping work before creating an issue. Model prerequisites, blockers, relationships, and duplicates with Jira issue links rather than a `Dependencies` description section.
-- Read [AGC example](references/agc-example.md) for work on the AGC board or this repository.
+- Read [Jira workflow example](references/agc-example.md) for work on a commerce board or service repository.
 
 ### 4. Create or improve ticket content
 

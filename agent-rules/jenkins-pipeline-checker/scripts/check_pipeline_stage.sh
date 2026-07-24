@@ -23,7 +23,7 @@ fi
 : "${JENKINS_USERNAME:?Set JENKINS_USERNAME in the environment}"
 : "${JENKINS_API_TOKEN:?Set JENKINS_API_TOKEN in the environment}"
 
-BASE_URL="${JENKINS_BASE_URL:-https://jenkins-nonprod.shss.chewy.com}"
+BASE_URL="${JENKINS_BASE_URL:?Set JENKINS_BASE_URL in the environment}"
 ORG="${JENKINS_ORG:-jenkins}"
 AUTH="${JENKINS_USERNAME}:${JENKINS_API_TOKEN}"
 
