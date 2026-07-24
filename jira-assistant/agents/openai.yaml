@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira Assistant"
+  short_description: "Plan concise, approved Jira changes"
+  default_prompt: "Use $jira-assistant to inspect this Jira work, propose a concise change plan, and wait for my approval before writing."

@@ -1,0 +1,10 @@
+# Local environment variables
+.env
+
+# Generated Node.js artifacts
+**/node_modules/
+**/dist/
+
+# Generated Python artifacts
+**/__pycache__/
+*.py[cod]
