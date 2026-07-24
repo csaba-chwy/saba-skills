@@ -1,0 +1,3 @@
+servicePaths:
+  - /home/alex/projects/example-api
+  - /home/alex/projects/example-worker
