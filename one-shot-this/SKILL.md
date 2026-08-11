@@ -36,6 +36,8 @@ Then ask for approval:
 
 STOP if not approved.
 
+Approval covers worker implementation, commits, a branch push, and an attempt to open a draft PR. The worker must not ask for a second push/PR approval.
+
 ## Step 4 — Generate work packets + spawn tmux workers
 1) Run scripts/write_work_packets.py to write one markdown packet per repo into ./run/packets/
 2) Run scripts/spawn_tmux_worktrees.sh to:
@@ -52,14 +54,20 @@ STOP if not approved.
 - Implement per packet.
 - Run tests listed in the packet.
 - Branch naming defaults to `feature/<branch_suffix>`. Use `bugfix/<branch_suffix>` only when the story explicitly indicates a bug fix or the plan sets `branch_type: bugfix`.
-- Before any push or PR, explicitly ask:
-  "Approve push + PR for <repo>?"
-- If approved:
-  - ensure the current local branch tracks `origin/<current-branch>` (do not only check that some upstream exists)
-  - if tracking is missing or points elsewhere (for example `origin/main`), set/fix it by pushing with upstream tracking (for example `git push -u origin <branch>`)
-  - create PR (prefer gh; otherwise print the exact manual command)
+- Keep the completed implementation in one or more logical commits. A remote branch and draft PR cannot include uncommitted changes.
+- Push the current branch even if GitHub CLI authentication is unavailable:
+  - `branch="$(git branch --show-current)"`
+  - `git push -u origin "$branch"`
+- Never run `gh auth login`, supply credentials, or otherwise authenticate on the user's behalf.
+- After a successful push, check GitHub CLI authentication with `gh auth status -h github.com` using network access that can reach `api.github.com`.
+  - If a restricted environment cannot reach GitHub's API, request normal network access and retry this status check. Do not mistake an API-connectivity failure for an invalid login, and never run `gh auth login` yourself.
+  - If the status check fails after GitHub API access is available, tell the user: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Do not attempt PR creation.
+  - If it is authenticated, write a temporary PR body with the Jira key plus a concise implementation/test summary. Open a non-interactive draft PR with `gh pr create --draft --base "${BASE_BRANCH:-main}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
+  - If draft-PR creation fails after authentication, report the failure and branch name. Do not retry authentication or undo the pushed branch.
 - Report back with:
   - branch name
+  - commit SHA
+  - push result
   - PR link
   - tests run + results
   - any follow-ups/risks
