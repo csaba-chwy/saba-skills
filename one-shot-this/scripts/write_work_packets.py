@@ -22,21 +22,24 @@ Implement the approved plan for this repo only.
 {build_tool_note}
 
 ## Push and PR note
-- When the user gives final approval to push and open a PR, ensure the current local branch tracks `origin/<current-branch>`.
-- Do not only check whether an upstream exists; it may exist but point to `origin/main` or `origin/master`.
-- A safe generic sequence is:
+- Commit the completed implementation before publishing it. A pushed branch and draft PR cannot include uncommitted changes.
+- Push the current branch and establish `origin/<current-branch>` tracking:
   - `branch="$(git branch --show-current)"`
-  - `upstream="$(git for-each-ref --format='%(upstream:short)' "refs/heads/$branch")"`
-  - `if [[ "$upstream" != "origin/$branch" ]]; then git push -u origin "$branch"; fi`
+  - `git push -u origin "$branch"`
+- Never run `gh auth login`, provide credentials, or otherwise authenticate on the user's behalf.
+- After the push, run `gh auth status -h github.com`.
+  - If it fails, report: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Stop after reporting the pushed branch.
+  - If it succeeds, write a temporary PR body with the Jira key plus a concise implementation and test summary. Create a non-interactive draft PR with `gh pr create --draft --base "${{BASE_BRANCH:-main}}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
+  - If PR creation fails, report the failure and leave the pushed branch intact. Do not retry authentication.
 
 ## Constraints
 - Only change this repo/worktree.
 - Keep commits small and logical.
-- Do not push or create a PR without asking for approval in this session.
+- The approved work packet authorizes commits, a branch push, and an attempted draft PR.
 
 ## Definition of done
 - Tests pass
-- PR opened and linked to Jira
+- Branch pushed; draft PR opened and linked to Jira when GitHub CLI is already authenticated
 - Summary posted back (PR link, changes, test results, follow-ups)
 """
 
