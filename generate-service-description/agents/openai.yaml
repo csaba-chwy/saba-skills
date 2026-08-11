@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate Service Description"
+  short_description: "Write or refresh repo-level service_description.md"
+  default_prompt: "Use $generate-service-description to inspect this repository and write or refresh a concise service_description.md. If one already exists, update it in place by removing stale information, rewriting changed behavior from the latest code, preserving accurate sections, and setting `Last verified: YYYY-MM-DD` to the current review date."

@@ -12,6 +12,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | `jenkins-pipeline-checker/` | Inspects Jenkins pipeline runs, stage results, and logs through the Jenkins APIs. |
 | `one-shot-this/` | Turns an approved Jira issue into per-repository work packets and launches isolated Codex workers in tmux-backed Git worktrees. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
+| `generate-service-description/` | Generates or refreshes concise, evidence-based `service_description.md` files for repositories. |
 
 `one-shot-this` composes the other capabilities: it reads requirements from Jira, uses the service catalog to identify affected repositories, prepares an implementation plan, and starts workers only after approval.
 
@@ -24,7 +25,8 @@ Each skill directory contains a `SKILL.md` entrypoint plus any scripts, referenc
 ├── jira-assistant/
 ├── jenkins-pipeline-checker/
 ├── one-shot-this/
-└── service-catalog-mcp/
+├── service-catalog-mcp/
+└── generate-service-description/
 ```
 
 ## Environment configuration
