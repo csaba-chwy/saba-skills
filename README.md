@@ -1,6 +1,6 @@
 # Agent Skills Repository
 
-This repository contains reusable Codex skills and supporting tools for Jira planning, Jenkins pipeline diagnostics, service discovery, and coordinated multi-repository implementation.
+This repository contains reusable Codex skills and supporting tools for Jira planning, Dynatrace investigations, Jenkins pipeline diagnostics, service discovery, and coordinated multi-repository implementation.
 
 The tracked files are environment-neutral. Instance URLs, credentials, and local repository paths belong in the ignored root `.env` file and are loaded at runtime.
 
@@ -9,6 +9,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | Directory | Purpose |
 | --- | --- |
 | `jira-assistant/` | Reads, searches, summarizes, and grooms Jira work using repository evidence and an approval-first workflow for writes. |
+| `dtctl/` | Investigates Dynatrace logs with bounded, read-only DQL queries and scan-cost guardrails. |
 | `jenkins-pipeline-checker/` | Inspects Jenkins pipeline runs, stage results, and logs through the Jenkins APIs. |
 | `one-shot-this/` | Turns an approved Jira issue into per-repository work packets and launches isolated Codex workers in tmux-backed Git worktrees. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
@@ -23,6 +24,7 @@ Each skill directory contains a `SKILL.md` entrypoint plus any scripts, referenc
 ```text
 .
 ├── jira-assistant/
+├── dtctl/
 ├── jenkins-pipeline-checker/
 ├── one-shot-this/
 ├── service-catalog-mcp/
@@ -60,6 +62,7 @@ Install a skill by copying or linking its directory into the Codex skills direct
 ```bash
 mkdir -p ~/.codex/skills
 ln -s /absolute/path/to/this-repository/jira-assistant ~/.codex/skills/jira-assistant
+ln -s /absolute/path/to/this-repository/dtctl ~/.codex/skills/dtctl
 ln -s /absolute/path/to/this-repository/jenkins-pipeline-checker ~/.codex/skills/jenkins-pipeline-checker
 ln -s /absolute/path/to/this-repository/one-shot-this ~/.codex/skills/one-shot-this
 ```
