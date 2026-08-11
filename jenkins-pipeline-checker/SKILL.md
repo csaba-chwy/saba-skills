@@ -1,13 +1,11 @@
 ---
 name: jenkins-pipeline-checker
-description: Check Jenkins pipeline runs and extract stage logs, errors, and summaries.
-metadata:
-  short-description: Jenkins pipeline checks
+description: Check Jenkins pipeline runs and extract stage status, decisive logs, errors, and verification evidence. Use when Codex needs to inspect a Jenkins or Blue Ocean URL, investigate a Jenkins-backed GitHub PR check, explain a failing pipeline, or return CI evidence to a pull request or Jira-backed implementation workflow.
 ---
 
 # Jenkins Pipeline Checker
 
-Use this skill when a user asks to check Jenkins pipeline status or stage output.
+Use this skill when a user asks to check Jenkins pipeline status or stage output, or when a GitHub pull-request check points to Jenkins.
 
 ## Prereqs
 
@@ -18,6 +16,7 @@ Use this skill when a user asks to check Jenkins pipeline status or stage output
 
 1) Confirm required env vars exist. If missing, ask the user for them.
 2) Find the pipeline run:
+   - When the input is a GitHub PR, inspect its checks first and follow the Jenkins check URL rather than guessing a job name.
    - For multibranch repos, the job is typically `build-<repo-name>` and the PR job name is `PR-<number>`.
    - Example Blue Ocean URL: `https://jenkins.example.com/blue/organizations/jenkins/build-<repo-name>/detail/PR-<number>/<run_id>/pipeline`.
 3) Query the run summary via the Blue Ocean REST API.
@@ -32,6 +31,21 @@ Use this skill when a user asks to check Jenkins pipeline status or stage output
      - Stage list (JSON): `/job/<pipeline>/job/PR-264/3/wfapi/describe`
      - Stage log (may be empty for some stages): `/job/<pipeline>/job/PR-264/3/execution/node/<id>/wfapi/log?start=0`
      - Full log (reliable fallback): `/job/<pipeline>/job/PR-264/3/consoleText`
+7) Return a compact CI evidence block that downstream GitHub and Jira workflows can reuse:
+   - PR or branch
+   - Jenkins run URL and run ID
+   - pipeline and failing stage
+   - status and decisive error lines
+   - likely code/config ownership
+   - recommended next action
+   - verification performed after any fix
+
+## Integration boundaries
+
+- Diagnose and report by default. Modify code, restart a build, comment on a PR, or update Jira only when the user authorized that action.
+- Keep the Jenkins run URL in the final evidence so a PR description, PR comment, or Jira update can link to the source rather than copying a large log.
+- If a code fix is requested, read the repository's `service_description.md` and Jira issue before planning, preserve the issue's acceptance criteria, and validate the focused test locally before rechecking Jenkins.
+- After a successful re-run, report both the local validation and the Jenkins result. Do not mark Jira complete solely because one Jenkins run passed.
 
 ## Best Defaults
 

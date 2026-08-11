@@ -37,6 +37,7 @@ When a repo already has `service_description.md`, treat it as a maintained docum
 - List significant downstream/upstream systems and why they are called.
 - Include queues, topics, databases, search indexes, auth providers, and major internal dependencies when they shape change impact.
 - Note likely cross-repo impact only when there is concrete evidence.
+- Capture repository, CI pipeline, and Jira ownership identifiers only when they are explicit in tracked configuration or documentation. These identifiers help downstream planning skills connect code, pull requests, build evidence, and Jira without guessing.
 
 6. Draft or refresh `service_description.md`.
 - Write for future discovery agents and developers, not end users.
@@ -89,6 +90,13 @@ When a repo already has `service_description.md`, treat it as a maintained docum
 - Favor headings and grouped bullets over dense prose.
 - Include a maintenance section that says when the document should be updated.
 - If the repo is not actually a service, adapt the title and purpose to the real unit of ownership instead of forcing microservice language.
+
+## Handoff to planning skills
+
+- Treat `service_description.md` as the discovery index used by the service catalog, not as a substitute for inspecting code.
+- Make `What usually changes together` concrete enough for Jira and implementation skills to identify cross-repository work.
+- Include stable CI job or Jira project identifiers only when repository evidence supports them; never invent names from the repository basename.
+- After a relevant architecture, API, job, integration, configuration, or operational change, refresh this file in the same code change so future Jira and implementation planning starts from current evidence.
 
 ## Reference
 

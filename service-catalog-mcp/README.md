@@ -6,9 +6,11 @@ Each configured repository path is expected to contain a `service_description.md
 
 ## Tools
 
-- `list_services()` returns all discovered services.
-- `get_service(repo_name)` returns the full `service_description.md` for one repository.
-- `find_services(query)` searches repository names and descriptions.
+- `list_services()` returns all discovered services, summaries, and `last_verified` dates.
+- `get_service(repo_name)` returns the full `service_description.md` and its verification date for one repository.
+- `find_services(query)` searches repository names and descriptions and returns verification dates with matches.
+
+The verification date comes from the generated `Last verified: YYYY-MM-DD` line. Planning skills should use it as a freshness signal and confirm important claims against current code when it is missing or too old for the change being planned.
 
 ## Configuration
 

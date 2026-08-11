@@ -1,10 +1,10 @@
 # Jenkins Pipeline Checker
 
-Agentic skill to facilitate interaction with Jenkins (especially reading logs and triggering builds.) Sample usage:
+Agentic skill for tracing Jenkins-backed GitHub checks to pipeline stages, decisive logs, and reusable CI evidence. Sample usage:
 
-> codex exec "Look at my branch's Jenkins build. Figure out why it's broken. Fix it. Push to origin. Wait for the build to finish. If it fails, rinse and repeat. If it succeeds, you're done."
+> codex exec "Inspect the failed Jenkins check on this PR, identify the decisive error and owning code, and report the run URL and next action."
 
-The agent will realize you're trying to fiddle with Jenkins builds, match to this skill, and start interacting with Jenkins builds.
+The skill diagnoses and reports by default. Code changes, rebuilds, pull-request comments, and Jira updates require the user's authorization.
 
 # Prerequisites
 

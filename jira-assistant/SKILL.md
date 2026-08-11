@@ -90,3 +90,12 @@ description: "Read, search, summarize, create, update, and groom Jira Epics, Sto
 - Verify key, summary, issue type, status, parent, assignee, required custom fields, links, comments, and the complete saved description.
 - Report what changed, what remained unchanged, any decisions still needed, and evidence supporting status or repository findings.
 - Include readable Jira links in the handoff.
+
+### 9. Hand work to code, GitHub, and CI
+
+- Treat the approved Jira description and acceptance criteria as the implementation contract. Preserve the full Jira issue URL, summary, ownership boundaries, acceptance criteria, validation, observability, rollout, and dependency links in any implementation plan or work packet.
+- When implementation reveals a material mismatch in Jira scope, stop and propose a Jira update before silently implementing a different contract.
+- Require every Jira-backed pull request to contain the full Jira issue URL in its description plus a concise mapping from acceptance criteria to code and tests.
+- When the user approves publishing a Jira-backed change, include linking the resulting pull request URL back to Jira in the proposed write scope. Prefer a Jira remote link when supported; otherwise add one concise comment, then read it back.
+- Use GitHub check results as the first CI index. When a failed check points to Jenkins, use the Jenkins pipeline checker to collect the run URL, failing stage, decisive error, and verification result before recommending Jira or code changes.
+- Do not infer completion from an open pull request or a green unit test alone. Reconcile Jira status with pull request state, required checks, relevant end-to-end validation, deployment evidence, and operational verification.

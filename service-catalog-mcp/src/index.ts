@@ -14,6 +14,7 @@ type ServiceRecord = {
   descriptionPath: string;
   description: string;
   summary: string;
+  lastVerified: string | null;
 };
 
 type ServiceCatalog = {
@@ -97,11 +98,16 @@ async function resolveConfig(): Promise<ServiceConfig> {
   );
 }
 
-function getSummary(markdown: string): string {
+export function getSummary(markdown: string): string {
   const lines = markdown
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !line.startsWith("#") &&
+        !/^Last verified:\s*/i.test(line)
+    );
 
   if (lines.length === 0) {
     return "";
@@ -109,6 +115,11 @@ function getSummary(markdown: string): string {
 
   const joined = lines.join(" ");
   return joined.length > 280 ? `${joined.slice(0, 277)}...` : joined;
+}
+
+export function getLastVerified(markdown: string): string | null {
+  const match = markdown.match(/^Last verified:\s*(\d{4}-\d{2}-\d{2})\s*$/im);
+  return match?.[1] ?? null;
 }
 
 async function loadCatalog(config: ServiceConfig): Promise<ServiceCatalog> {
@@ -126,7 +137,8 @@ async function loadCatalog(config: ServiceConfig): Promise<ServiceCatalog> {
         repoPath,
         descriptionPath,
         description,
-        summary: getSummary(description)
+        summary: getSummary(description),
+        lastVerified: getLastVerified(description)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -187,6 +199,7 @@ async function createServer(config: ServiceConfig): Promise<McpServer> {
         services: catalog.services.map((service) => ({
           repo_name: service.repoName,
           path: service.repoPath,
+          last_verified: service.lastVerified,
           summary: service.summary
         }))
       });
@@ -215,6 +228,7 @@ async function createServer(config: ServiceConfig): Promise<McpServer> {
         repo_name: target.repoName,
         path: target.repoPath,
         description_path: target.descriptionPath,
+        last_verified: target.lastVerified,
         description_markdown: target.description,
         warnings: catalog.warnings
       });
@@ -245,6 +259,7 @@ async function createServer(config: ServiceConfig): Promise<McpServer> {
           repo_name: entry.service.repoName,
           path: entry.service.repoPath,
           score: entry.score,
+          last_verified: entry.service.lastVerified,
           summary: entry.service.summary
         }))
       });
@@ -261,8 +276,10 @@ async function main(): Promise<void> {
   await server.connect(transport);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  process.stderr.write(`Failed to start server: ${message}\n`);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    process.stderr.write(`Failed to start server: ${message}\n`);
+    process.exit(1);
+  });
+}

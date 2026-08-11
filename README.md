@@ -10,11 +10,24 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | --- | --- |
 | `jira-assistant/` | Reads, searches, summarizes, and grooms Jira work using repository evidence and an approval-first workflow for writes. |
 | `jenkins-pipeline-checker/` | Inspects Jenkins pipeline runs, stage results, and logs through the Jenkins APIs. |
-| `one-shot-this/` | Turns an approved Jira issue into per-repository work packets and launches isolated Codex workers in tmux-backed Git worktrees. |
+| `one-shot-this/` | Implements an approved single-repository Jira change in the current session, or launches isolated Codex workers in tmux-backed Git worktrees for a multi-repository change. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
 | `generate-service-description/` | Generates or refreshes concise, evidence-based `service_description.md` files for repositories. |
 
-`one-shot-this` composes the other capabilities: it reads requirements from Jira, uses the service catalog to identify affected repositories, prepares an implementation plan, and starts workers only after approval.
+`one-shot-this` composes the other capabilities: it reads the executable contract from Jira, uses service descriptions and the catalog to identify affected repositories, preserves requirements in implementation packets and GitHub pull requests, and routes Jenkins-backed checks through the pipeline checker. Single-repository plans stay in the current session; only multi-repository plans start workers.
+
+## Shared delivery contract
+
+The skills are designed as one evidence chain:
+
+1. `generate-service-description` records repository purpose, integrations, change coupling, and a `Last verified` date.
+2. `service-catalog-mcp` exposes that description and verification date for impact analysis.
+3. `jira-assistant` turns current repository evidence into an approved Jira contract with acceptance criteria, validation, observability, rollout, and dependency links.
+4. `one-shot-this` carries the full Jira URL and contract into each repository plan, work packet, branch, and draft PR.
+5. GitHub checks index CI. `jenkins-pipeline-checker` follows Jenkins-backed checks to the failing stage and returns a reusable evidence block with the run URL.
+6. The PR URL is linked back to Jira, and Jira status is reconciled against PR, CI, deployment, and operational evidence rather than code presence alone.
+
+Handoffs should preserve source URLs instead of copying large external records. A Jira-backed PR must include the full Jira ticket URL; a Jira update for PR-backed work must include the PR URL.
 
 ## Repository layout
 
@@ -62,11 +75,12 @@ mkdir -p ~/.codex/skills
 ln -s /absolute/path/to/this-repository/jira-assistant ~/.codex/skills/jira-assistant
 ln -s /absolute/path/to/this-repository/jenkins-pipeline-checker ~/.codex/skills/jenkins-pipeline-checker
 ln -s /absolute/path/to/this-repository/one-shot-this ~/.codex/skills/one-shot-this
+ln -s /absolute/path/to/this-repository/generate-service-description ~/.codex/skills/generate-service-description
 ```
 
 Restart or reload Codex after adding a skill so it can discover the new `SKILL.md`.
 
-The coordinated workflow additionally requires Git, Python 3, tmux, the Codex CLI, Jira access, and the service-catalog MCP server.
+The multi-repository worker workflow additionally requires Git, Python 3, tmux, the Codex CLI, Jira access, and the service-catalog MCP server.
 
 ## Service catalog setup
 
@@ -86,4 +100,4 @@ Every path configured through `SERVICE_CATALOG_PATHS` should point to a reposito
 - Keep organization-specific names, URLs, credentials, and machine paths in `.env`, never in tracked examples.
 - Treat Jira inspection as read-only until a proposed write plan is explicitly approved.
 - Review generated multi-repository plans before spawning workers.
-- Run the component-specific validation after changing a skill or server.
+- Run the component-specific validation after changing a skill or server: validate each skill with the canonical `quick_validate.py`, run `python3 -m unittest one-shot-this/scripts/test_write_work_packets.py`, and run `npm test` in `service-catalog-mcp/`.
