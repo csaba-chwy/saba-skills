@@ -59,8 +59,9 @@ Approval covers worker implementation, commits, a branch push, and an attempt to
   - `branch="$(git branch --show-current)"`
   - `git push -u origin "$branch"`
 - Never run `gh auth login`, supply credentials, or otherwise authenticate on the user's behalf.
-- After a successful push, check GitHub CLI authentication with `gh auth status -h github.com`.
-  - If it is not authenticated, tell the user: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Do not attempt PR creation.
+- After a successful push, check GitHub CLI authentication with `gh auth status -h github.com` using network access that can reach `api.github.com`.
+  - If a restricted environment cannot reach GitHub's API, request normal network access and retry this status check. Do not mistake an API-connectivity failure for an invalid login, and never run `gh auth login` yourself.
+  - If the status check fails after GitHub API access is available, tell the user: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Do not attempt PR creation.
   - If it is authenticated, write a temporary PR body with the Jira key plus a concise implementation/test summary. Open a non-interactive draft PR with `gh pr create --draft --base "${BASE_BRANCH:-main}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
   - If draft-PR creation fails after authentication, report the failure and branch name. Do not retry authentication or undo the pushed branch.
 - Report back with:

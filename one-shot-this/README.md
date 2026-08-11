@@ -19,6 +19,8 @@ gh auth status -h github.com
 
 Workers never run this login command, provide credentials, or attempt to authenticate for you.
 
+The Codex command sandbox may not be able to reach `api.github.com`. This is separate from GitHub authentication: when a worker gets an API-connectivity error, it requests normal network access and retries `gh auth status` before deciding that login is required. Do not add a GitHub token to this repository's `.env` file.
+
 ## Workflow
 
 1. Supply a Jira issue key.
