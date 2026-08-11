@@ -41,24 +41,28 @@ TEMPLATE = """# Work Packet: {repo}
 {build_tool_note}
 
 ## Push and PR note
-- Ask: `Approve push + draft PR + Jira link for {repo}?`
-- When the user gives that approval, ensure the current local branch tracks `origin/<current-branch>`.
-- Do not only check whether an upstream exists; it may exist but point to `origin/main` or `origin/master`.
-- A safe generic sequence is:
+- The approved work packet authorizes implementation, logical commits, a branch push, a draft-PR attempt, and Jira link-back. Do not ask for a second approval unless scope materially changes.
+- Commit the completed implementation before publishing it. A pushed branch and draft PR cannot include uncommitted changes.
+- Push the current branch and establish `origin/<current-branch>` tracking:
   - `branch="$(git branch --show-current)"`
-  - `upstream="$(git for-each-ref --format='%(upstream:short)' "refs/heads/$branch")"`
-  - `if [[ "$upstream" != "origin/$branch" ]]; then git push -u origin "$branch"; fi`
-- Open a draft PR whose description includes the full Jira URL `{jira_url}`, an acceptance-criteria mapping, tests, observability, and rollout notes.
-- Link the PR URL back to Jira and read it back. Inspect GitHub checks; if one points to Jenkins, use `jenkins-pipeline-checker` and retain the Jenkins run URL in the result.
+  - `git push -u origin "$branch"`
+- Never run `gh auth login`, provide credentials, or otherwise authenticate on the user's behalf.
+- After the push, run `gh auth status -h github.com` using network access that can reach `api.github.com`.
+  - If a restricted environment cannot reach GitHub's API, request normal network access and retry the status check. Do not mistake an API-connectivity failure for an invalid login, and never run `gh auth login` yourself.
+  - If it fails after GitHub API access is available, report: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Stop after reporting the pushed branch.
+  - If it succeeds, write a temporary PR body containing the full Jira URL `{jira_url}`, acceptance-criteria mapping, implementation summary, tests, observability, and rollout notes. Create a non-interactive draft PR with `gh pr create --draft --base "${{BASE_BRANCH:-main}}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
+  - If PR creation fails, report the failure and leave the pushed branch intact. Do not retry authentication.
+- After the PR opens, link its URL back to Jira and read the saved link or comment back.
+- Inspect GitHub checks. If one points to Jenkins, use `jenkins-pipeline-checker` and retain the Jenkins run URL. If runtime verification needs Dynatrace logs, use `dtctl` only for a bounded, read-only query.
 
 ## Constraints
 - Only change this repo/worktree.
 - Keep commits small and logical.
-- Do not push or create a PR without asking for approval in this session.
+- The approved work packet authorizes commits, a branch push, and an attempted draft PR.
 
 ## Definition of done
 - Tests pass
-- Draft PR opened with the Jira contract and linked back to Jira
+- Branch pushed; draft PR opened with the Jira contract and linked back to Jira when GitHub CLI is already authenticated
 - Relevant GitHub/Jenkins checks inspected or their pending state reported
 - Summary posted back (PR link, Jira link-back, changes, test and CI results, follow-ups)
 """

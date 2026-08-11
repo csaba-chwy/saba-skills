@@ -58,7 +58,9 @@ class WriteWorkPacketsTest(unittest.TestCase):
         self.assertIn("Count bounded publish outcomes", packet)
         self.assertIn("Deploy the producer before the consumer", packet)
         self.assertIn("https://jira.example.com/browse/SHOP-100", packet)
-        self.assertIn("Approve push + draft PR + Jira link", packet)
+        self.assertIn("authorizes implementation, logical commits", packet)
+        self.assertIn("gh auth status -h github.com", packet)
+        self.assertIn("link its URL back to Jira", packet)
 
     def test_rejects_a_plan_without_full_jira_url(self):
         plan = {

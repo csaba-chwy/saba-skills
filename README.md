@@ -1,6 +1,6 @@
 # Agent Skills Repository
 
-This repository contains reusable Codex skills and supporting tools for Jira planning, Jenkins pipeline diagnostics, service discovery, and coordinated multi-repository implementation.
+This repository contains reusable Codex skills and supporting tools for Jira planning, Dynatrace investigations, Jenkins pipeline diagnostics, service discovery, and coordinated multi-repository implementation.
 
 The tracked files are environment-neutral. Instance URLs, credentials, and local repository paths belong in the ignored root `.env` file and are loaded at runtime.
 
@@ -9,6 +9,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | Directory | Purpose |
 | --- | --- |
 | `jira-assistant/` | Reads, searches, summarizes, and grooms Jira work using repository evidence and an approval-first workflow for writes. |
+| `dtctl/` | Investigates Dynatrace logs with bounded, read-only DQL queries and scan-cost guardrails. |
 | `jenkins-pipeline-checker/` | Inspects Jenkins pipeline runs, stage results, and logs through the Jenkins APIs. |
 | `one-shot-this/` | Implements an approved single-repository Jira change in the current session, or launches isolated Codex workers in tmux-backed Git worktrees for a multi-repository change. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
@@ -25,7 +26,8 @@ The skills are designed as one evidence chain:
 3. `jira-assistant` turns current repository evidence into an approved Jira contract with acceptance criteria, validation, observability, rollout, and dependency links.
 4. `one-shot-this` carries the full Jira URL and contract into each repository plan, work packet, branch, and draft PR.
 5. GitHub checks index CI. `jenkins-pipeline-checker` follows Jenkins-backed checks to the failing stage and returns a reusable evidence block with the run URL.
-6. The PR URL is linked back to Jira, and Jira status is reconciled against PR, CI, deployment, and operational evidence rather than code presence alone.
+6. When runtime or deployment verification requires logs, `dtctl` performs bounded, read-only Dynatrace investigation and returns the target and time window as evidence.
+7. The PR URL is linked back to Jira, and Jira status is reconciled against PR, CI, deployment, and operational evidence rather than code presence alone.
 
 Handoffs should preserve source URLs instead of copying large external records. A Jira-backed PR must include the full Jira ticket URL; a Jira update for PR-backed work must include the PR URL.
 
@@ -36,6 +38,7 @@ Each skill directory contains a `SKILL.md` entrypoint plus any scripts, referenc
 ```text
 .
 ├── jira-assistant/
+├── dtctl/
 ├── jenkins-pipeline-checker/
 ├── one-shot-this/
 ├── service-catalog-mcp/
@@ -73,6 +76,7 @@ Install a skill by copying or linking its directory into the Codex skills direct
 ```bash
 mkdir -p ~/.codex/skills
 ln -s /absolute/path/to/this-repository/jira-assistant ~/.codex/skills/jira-assistant
+ln -s /absolute/path/to/this-repository/dtctl ~/.codex/skills/dtctl
 ln -s /absolute/path/to/this-repository/jenkins-pipeline-checker ~/.codex/skills/jenkins-pipeline-checker
 ln -s /absolute/path/to/this-repository/one-shot-this ~/.codex/skills/one-shot-this
 ln -s /absolute/path/to/this-repository/generate-service-description ~/.codex/skills/generate-service-description
