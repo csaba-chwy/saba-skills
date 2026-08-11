@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-import json, os, re, sys
+import json, re, sys
 from pathlib import Path
 
 TEMPLATE = """# Work Packet: {repo}
 
 ## Context
-- Jira: {jira_key}
+- Jira: [{jira_key}]({jira_url})
+- Summary: {summary}
 - Repo: {repo}
 - Branch: {branch}
 
+## Scope and boundaries
+{description}
+
 ## Objective
-Implement the approved plan for this repo only.
+{why_impacted}
+
+## Acceptance criteria
+{acceptance_criteria}
 
 ## Steps
 {steps}
@@ -18,10 +25,23 @@ Implement the approved plan for this repo only.
 ## Tests to run
 {tests}
 
+## Observability
+{observability}
+
+## Rollout notes
+{rollout_notes}
+
+## Cross-repository coordination
+{cross_repo_steps}
+
+## Dependency links
+{dependency_links}
+
 ## Build tool note
 {build_tool_note}
 
 ## Push and PR note
+- The approved work packet authorizes implementation, logical commits, a branch push, a draft-PR attempt, and Jira link-back. Do not ask for a second approval unless scope materially changes.
 - Commit the completed implementation before publishing it. A pushed branch and draft PR cannot include uncommitted changes.
 - Push the current branch and establish `origin/<current-branch>` tracking:
   - `branch="$(git branch --show-current)"`
@@ -30,8 +50,10 @@ Implement the approved plan for this repo only.
 - After the push, run `gh auth status -h github.com` using network access that can reach `api.github.com`.
   - If a restricted environment cannot reach GitHub's API, request normal network access and retry the status check. Do not mistake an API-connectivity failure for an invalid login, and never run `gh auth login` yourself.
   - If it fails after GitHub API access is available, report: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Stop after reporting the pushed branch.
-  - If it succeeds, write a temporary PR body with the Jira key plus a concise implementation and test summary. Create a non-interactive draft PR with `gh pr create --draft --base "${{BASE_BRANCH:-main}}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
+  - If it succeeds, write a temporary PR body containing the full Jira URL `{jira_url}`, acceptance-criteria mapping, implementation summary, tests, observability, and rollout notes. Create a non-interactive draft PR with `gh pr create --draft --base "${{BASE_BRANCH:-main}}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
   - If PR creation fails, report the failure and leave the pushed branch intact. Do not retry authentication.
+- After the PR opens, link its URL back to Jira and read the saved link or comment back.
+- Inspect GitHub checks. If one points to Jenkins, use `jenkins-pipeline-checker` and retain the Jenkins run URL. If runtime verification needs Dynatrace logs, use `dtctl` only for a bounded, read-only query.
 
 ## Constraints
 - Only change this repo/worktree.
@@ -40,14 +62,25 @@ Implement the approved plan for this repo only.
 
 ## Definition of done
 - Tests pass
-- Branch pushed; draft PR opened and linked to Jira when GitHub CLI is already authenticated
-- Summary posted back (PR link, changes, test results, follow-ups)
+- Branch pushed; draft PR opened with the Jira contract and linked back to Jira when GitHub CLI is already authenticated
+- Relevant GitHub/Jenkins checks inspected or their pending state reported
+- Summary posted back (PR link, Jira link-back, changes, test and CI results, follow-ups)
 """
 
 def bullet(lines):
     if not lines:
         return "- (none)"
     return "\n".join([f"- {x}" for x in lines])
+
+def required_text(value, field):
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"Plan JSON requires non-empty {field}")
+    return value.strip()
+
+def required_list(value, field):
+    if not isinstance(value, list) or not value:
+        raise SystemExit(f"Plan JSON requires non-empty {field}[]")
+    return value
 
 def build_tool_note(repo_config):
     if repo_config.get("build_tool") == "gradle":
@@ -97,7 +130,13 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     plan = json.loads(plan_path.read_text())
-    jira_key = plan.get("jira_key") or plan.get("issue") or "UNKNOWN"
+    jira_key = required_text(plan.get("jira_key") or plan.get("issue"), "jira_key")
+    jira_url = required_text(plan.get("jira_url"), "jira_url")
+    if not re.match(r"^https?://", jira_url):
+        raise SystemExit("Plan JSON jira_url must be an absolute HTTP(S) URL")
+    summary = required_text(plan.get("summary") or plan.get("title"), "summary")
+    description = required_text(plan.get("description"), "description")
+    acceptance_criteria = required_list(plan.get("acceptance_criteria"), "acceptance_criteria")
 
     repos = plan.get("repos", [])
     if not repos:
@@ -106,14 +145,24 @@ def main():
     for r in repos:
         repo = r["name"]
         branch = branch_name(plan, jira_key, r)
+        repo_acceptance_criteria = r.get("acceptance_criteria") or acceptance_criteria
         steps = bullet(r.get("steps", []))
         tests = bullet(r.get("tests", []))
         content = TEMPLATE.format(
             jira_key=jira_key,
+            jira_url=jira_url,
+            summary=summary,
+            description=description,
             repo=repo,
             branch=branch,
+            why_impacted=required_text(r.get("why_impacted"), f"repos[{repo}].why_impacted"),
+            acceptance_criteria=bullet(repo_acceptance_criteria),
             steps=steps,
             tests=tests,
+            observability=bullet(r.get("observability", [])),
+            rollout_notes=bullet(r.get("rollout_notes", [])),
+            cross_repo_steps=bullet(plan.get("cross_repo_steps", [])),
+            dependency_links=bullet(plan.get("dependency_links", [])),
             build_tool_note=build_tool_note(r),
         )
         (out_dir / f"{repo.replace('/','-')}.md").write_text(content)

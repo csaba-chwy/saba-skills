@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jenkins Pipeline Checker"
+  short_description: "Trace Jenkins PR checks to decisive CI evidence"
+  default_prompt: "Use $jenkins-pipeline-checker to inspect this Jenkins or GitHub PR build, identify the failing stage and decisive error, and return a compact evidence block with the run URL and recommended next action."

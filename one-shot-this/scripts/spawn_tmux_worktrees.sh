@@ -27,25 +27,7 @@ PLAN_JSON="$(abs_path "$PLAN_JSON")"
 PACKETS_DIR="$(abs_path "$PACKETS_DIR")"
 
 require() { command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 2; }; }
-require git
-require tmux
 require python3
-require codex
-
-if [[ ! -x "${WORKER_SHELL}" ]]; then
-  WORKER_SHELL="/bin/bash"
-fi
-
-mkdir -p "${SHARED_GRADLE_USER_HOME}"
-
-if [[ -f "${DEFAULT_GRADLE_PROPERTIES_SOURCE}" && ! -f "${SHARED_GRADLE_USER_HOME}/gradle.properties" ]]; then
-  cp "${DEFAULT_GRADLE_PROPERTIES_SOURCE}" "${SHARED_GRADLE_USER_HOME}/gradle.properties"
-fi
-
-if [[ ! -f "${GRADLE_WRAPPER_SOURCE}" ]]; then
-  echo "Missing helper script: ${GRADLE_WRAPPER_SOURCE}" >&2
-  exit 2
-fi
 
 if [[ ! -f "${PLAN_JSON}" ]]; then
   echo "Plan file not found: ${PLAN_JSON}" >&2
@@ -64,9 +46,6 @@ print(json.dumps(json.load(open(sys.argv[1]))))
 PY
 )"
 
-SESSION="codex-${JIRA_KEY}"
-tmux has-session -t "$SESSION" 2>/dev/null && { echo "tmux session $SESSION already exists" >&2; exit 2; }
-
 repo_count="$(python3 - "$PLAN_JSON_CONTENT" <<'PY'
 import json,sys
 plan=json.loads(sys.argv[1])
@@ -78,6 +57,33 @@ if [[ "$repo_count" -lt 1 ]]; then
   echo "No repos in plan" >&2
   exit 2
 fi
+
+if [[ "$repo_count" -eq 1 ]]; then
+  echo "Single-repo plans must be implemented in the current Codex session; tmux workers were not started." >&2
+  exit 2
+fi
+
+require git
+require tmux
+require codex
+
+if [[ ! -x "${WORKER_SHELL}" ]]; then
+  WORKER_SHELL="/bin/bash"
+fi
+
+mkdir -p "${SHARED_GRADLE_USER_HOME}"
+
+if [[ -f "${DEFAULT_GRADLE_PROPERTIES_SOURCE}" && ! -f "${SHARED_GRADLE_USER_HOME}/gradle.properties" ]]; then
+  cp "${DEFAULT_GRADLE_PROPERTIES_SOURCE}" "${SHARED_GRADLE_USER_HOME}/gradle.properties"
+fi
+
+if [[ ! -f "${GRADLE_WRAPPER_SOURCE}" ]]; then
+  echo "Missing helper script: ${GRADLE_WRAPPER_SOURCE}" >&2
+  exit 2
+fi
+
+SESSION="codex-${JIRA_KEY}"
+tmux has-session -t "$SESSION" 2>/dev/null && { echo "tmux session $SESSION already exists" >&2; exit 2; }
 
 pane_cmd_for_index() {
   local idx="$1"

@@ -1,2 +1,6 @@
+interface:
+  display_name: "One Shot This"
+  short_description: "Plan and implement Jira work across repositories"
+  default_prompt: "Use $one-shot-this to turn this Jira issue into an evidence-based repository plan, preserve the Jira contract through implementation and CI, and ask for the required approvals."
 policy:
   allow_implicit_invocation: false

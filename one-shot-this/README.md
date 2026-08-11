@@ -1,6 +1,6 @@
 # one-shot-this
 
-`one-shot-this` turns an approved Jira issue into isolated, per-repository Codex workspaces. It reads the issue, discovers affected services, prepares a reviewable plan, and starts one tmux-backed worker per repository in a separate Git worktree.
+`one-shot-this` turns an approved Jira issue into an implementation that preserves the Jira contract through code, GitHub, and CI. Single-repository changes stay in the current Codex session; multi-repository changes use one isolated tmux-backed Git worktree per repository.
 
 ## Prerequisites
 
@@ -24,13 +24,14 @@ The Codex command sandbox may not be able to reach `api.github.com`. This is sep
 ## Workflow
 
 1. Supply a Jira issue key.
-2. Review the generated repository plan and approve worker spawning.
-3. The launcher creates a worktree and branch for each repository, then opens one Codex worker per tmux pane.
-4. Each worker implements its packet, runs the specified tests, and creates logical commits.
-5. Each worker pushes its branch to `origin` with upstream tracking.
-6. If `gh auth status -h github.com` succeeds, the worker opens a draft PR against `${BASE_BRANCH:-main}`. Otherwise, it reports the already-pushed branch and the login command you need to run.
+2. Review the generated repository plan and approve implementation, commits, push, draft PR, and Jira link-back.
+3. For one repository, continue in the current session. For multiple repositories, create a worktree and Codex worker per repository.
+4. The current session or each worker implements its approved scope, runs the specified tests, and creates logical commits.
+5. Each implementation branch is pushed to `origin` with upstream tracking.
+6. If `gh auth status -h github.com` succeeds, open a draft PR against `${BASE_BRANCH:-main}` containing the full Jira URL, acceptance-criteria mapping, tests, observability, and rollout notes. Otherwise, report the already-pushed branch and the login command the user needs to run.
+7. Link the PR URL back to Jira, inspect GitHub checks, and use the Jenkins or bounded read-only Dynatrace skill when those systems hold the relevant evidence.
 
-The initial approval authorizes these worker actions. No second push/PR approval is requested.
+The initial approval authorizes these actions. No second push/PR approval is requested unless the approved scope materially changes.
 
 ## Environment
 
@@ -39,7 +40,7 @@ The initial approval authorizes these worker actions. No second push/PR approval
 
 ## Use
 
-Install or link this skill into the Codex skills directory, then invoke it explicitly with a Jira issue key. After the workers start, attach to the session shown by the launcher:
+Install or link this skill into the Codex skills directory, then invoke it explicitly with a Jira issue key. For a multi-repository change, attach to the session shown by the launcher:
 
 ```bash
 tmux attach -t codex-<JIRA_KEY>

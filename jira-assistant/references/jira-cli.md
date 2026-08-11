@@ -80,3 +80,13 @@ jira issue view SHOP-123 --raw
 ```
 
 Verify the complete description plus key, summary, type, status, parent, assignee, required fields, links, and comments. Treat command exit status plus read-back as authoritative.
+
+## Link a pull request back to Jira
+
+When a user-approved publishing workflow includes Jira linkage, prefer a supported Jira remote-link command or connector action. If the configured CLI does not expose remote web links, add one concise comment containing the PR URL:
+
+```text
+jira issue comment add SHOP-123 'Draft PR: https://github.com/example/repository/pull/123' --no-input
+```
+
+Read the issue back and verify the saved URL. Do not add a second comment when the PR is already linked in the issue.
