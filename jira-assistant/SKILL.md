@@ -48,8 +48,8 @@ description: "Read, search, summarize, create, update, and groom Jira Epics, Sto
 ### 4. Create or improve ticket content
 
 - Use the concise formats in [templates](references/templates.md).
-- Target roughly half the length of comparable existing tickets. For a typical Story or Bug, aim for 80–160 words total; for an Epic, aim for 120–220 words. Exceed these ranges only when contract, failure-path, or ownership detail is necessary to make the work executable.
-- Keep the Description to one compact paragraph, normally one or two sentences and 40–70 words. Do not repeat acceptance criteria, link context, or implementation detail there.
+- Scale the ticket to the work. Include only the context, boundaries, and validation needed to make the outcome executable and verifiable; do not pad a small ticket to meet a word count or a fixed number of sections.
+- For very small or well-understood work, a one-sentence Description and one or two focused acceptance criteria may be sufficient. For complex work, add detail only when it clarifies contract, failure paths, ownership, rollout, or verification. Do not repeat acceptance criteria, link context, or implementation detail in the Description.
 - Keep exactly the useful current-state context. Make descriptions date agnostic; leave historical reconciliation to Jira history or an approved comment.
 - Do not add `Removed from this Story`, `Dependencies`, or dated reconciliation sections.
 - Put short, human-readable link labels in `Relevant Links`; never expose a long URL as its own label.

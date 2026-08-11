@@ -1,6 +1,6 @@
 # Concise Jira templates
 
-Default to a 40–70 word Description, one useful link, and three brief acceptance criteria. Avoid repetition and optional implementation detail.
+Use the smallest useful structure for the work. A very short ticket may need only a brief Description and one or two acceptance criteria; add links, criteria, and context only when they improve shared understanding or verification. Avoid repetition, padding, and optional implementation detail.
 
 ## Epic
 
