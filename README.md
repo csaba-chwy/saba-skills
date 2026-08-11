@@ -9,7 +9,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | Directory | Purpose |
 | --- | --- |
 | `jira-assistant/` | Reads, searches, summarizes, and grooms Jira work using repository evidence and an approval-first workflow for writes. |
-| `dtctl/` | Investigates Dynatrace resources and Grail data with bounded DQL queries, scan-cost guardrails, and verified deep links to traces, logs, and events. |
+| `dtctl/` | Investigates Dynatrace logs with bounded, read-only DQL queries and scan-cost guardrails. |
 | `jenkins-pipeline-checker/` | Inspects Jenkins pipeline runs, stage results, and logs through the Jenkins APIs. |
 | `one-shot-this/` | Turns an approved Jira issue into per-repository work packets and launches isolated Codex workers in tmux-backed Git worktrees. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
