@@ -158,35 +158,9 @@ If the span query returns `NOT_AUTHORIZED_FOR_TABLE`, report that trace data cou
 
 If both structured correlation fields and message-level trace/span markers are absent, continue the log investigation using exact workload, pod, and timestamp filters. Report that log-to-trace correlation is unavailable for the sampled records; do not infer that the service emits no traces.
 
-### Verified service behavior
+### Known service mappings
 
-For `[stg][use1]sf-item` in nonproduction:
-
-- Resolve the service name to `SERVICE-E8F750E0328DD297`; filtering logs by this entity ID is selective and reliable.
-- The logs populate `trace_id` and `span_id`. The similarly named `trace.id` and `span.id` fields are null on these log records, and `service.name` is also null.
-- Request lifecycle records such as `received_request` and `processed_request` can share the same trace and span IDs, so an exact `trace_id` pivot connects them without reading full log content.
-- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after the dedicated nonproduction credential was refreshed. Probe capabilities instead of inferring them from the `platform token` auth type.
-
-For `[stg][use1]agentic-commerce-notifier` in nonproduction:
-
-- Resolve the service name to `SERVICE-96B2F23C4556A54F`, but do not rely on that ID for its logs: sampled records had null `dt.entity.service` and `service.name`.
-- Use the exact workload `[stg][use1]agentic-commerce-notifier` to retrieve logs. Sampled records also had null `trace_id`, `span_id`, `trace.id`, and `span.id`, with no trace/span marker names in message text.
-- The `nonprod` context can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
-- An exact trace-ID pivot connected notifier spans to spans and logs from other services. Because the notifier's own logs lacked IDs, they were not natively associated with those spans in the trace view. Build a separate mapping for notifier-local logs using exact pod plus the smallest span-time window, and distinguish that supporting evidence from an exact ID join.
-
-For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
-
-- Resolve the service name to `SERVICE-E5986BAFC3F56E4C`. Its logs are retrieved reliably by exact workload and can populate `trace_id` and `span_id` even when `dt.entity.service` and `service.name` are null.
-- Start with `dt.service.request.count` for both recent and historical investigations, then query root spans in the active minute. A steady baseline was distinguishable from traffic spikes. A one-minute workload log probe can still reach the 5 GB cap, so use the selected span's exact pod and time interval, then pivot by returned exact IDs; do not widen the window or raise the cap.
-- Filter HTTP root spans with `request.is_root_span == true`. The captured request ID is in the string-array field `http.request.header.x-request-id`; sampled top-level `x-request-id` and `request_attribute.x-request-id` fields were null.
-- Sampled logs had `trace_id` and `span_id` values matching the trace and root-span IDs. Reuse this native mapping: the orchestrator logs are already available from the corresponding trace/span, so query them by exact IDs instead of building a pod/time mapping. Logs exposed trace/span IDs but not the captured header field.
-
-For `[prd][use1]chewy-api-router` in production:
-
-- Resolve the service name to `SERVICE-592C600D2FAD64FA`. Its `dt.service.request.count` metric exposes `failed` and `endpoint.name`; use `failed == true` for exact failure trends and rankings before raw telemetry.
-- Treat `endpoint.name` values such as GraphQL query and mutation names as router operations, not confirmed downstream subgraph names.
-- Use the exact workload `[prd][use1]chewy-api-router` for logs that lack `dt.entity.service`, `service.name`, `trace_id`, and `span_id` enrichment.
-- High traffic can exhaust a 5 GB scan cap in an unsampled minute of spans or 15 minutes of logs. A `--default-sampling-ratio 100` workload log query completed below the cap and reported `sampled: true`; retain the requested large range and increase sampling before narrowing it.
+Check [mappings.md](mappings.md) for exact known service-name-to-entity-ID mappings before running a discovery query. When the target has a linked service-specific file, read only that file for its verified debugging behavior; do not load notes for unrelated services. Re-resolve the service name if a mapping is missing, returns no data, or conflicts with current telemetry.
 
 ## Other useful patterns
 
