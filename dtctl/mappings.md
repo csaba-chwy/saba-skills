@@ -1,12 +1,19 @@
 # Known Dynatrace service mappings
 
-Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Query the same known entity ID in that selected context; assume it is present in both contexts and every region.
+Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Preserve those tags when constructing an exact service or workload name from the telemetry stem.
 
-| Logical service | Service entity ID | Debugging notes |
-| --- | --- | --- |
-| `sf-item` | `SERVICE-E8F750E0328DD297` | [sf-item](services/sf-item.md) |
-| `agentic-commerce-notifier` | `SERVICE-96B2F23C4556A54F` | [agentic-commerce-notifier](services/agentic-commerce-notifier.md) |
-| `agentic-commerce-orchestrator` | `SERVICE-E5986BAFC3F56E4C` | [agentic-commerce-orchestrator](services/agentic-commerce-orchestrator.md) |
-| `chewy-api-router` | `SERVICE-592C600D2FAD64FA` | [chewy-api-router](services/chewy-api-router.md) |
+| Logical service | Telemetry stem | Entity ID seed | Debugging notes |
+| --- | --- | --- | --- |
+| `sf-item` | `sf-item` | `SERVICE-E8F750E0328DD297` | [sf-item](services/sf-item.md) |
+| `agentic-commerce-notifier` | `agentic-commerce-notifier` | `SERVICE-96B2F23C4556A54F` | [agentic-commerce-notifier](services/agentic-commerce-notifier.md) |
+| `agentic-commerce-orchestrator` | `agentic-commerce-orchestrator` | `SERVICE-E5986BAFC3F56E4C` | [agentic-commerce-orchestrator](services/agentic-commerce-orchestrator.md) |
+| `chewy-api-router` | `chewy-api-router` | `SERVICE-592C600D2FAD64FA` | [chewy-api-router](services/chewy-api-router.md) |
+| `cart-a` | `cart-a` | `SERVICE-032E4C5EE9101D63` | [cart-a](services/cart-a.md) |
+| `cart-b` | `cart-b` | `SERVICE-BB0EFB16FAAC4EB8` | [cart-b](services/cart-b.md) |
+| `checkout-a` | `checkout-a` | `SERVICE-CD10D15F54A9F272` | [checkout-a](services/checkout-a.md) |
+| `checkout-b` | `checkout-b` | `SERVICE-1CE859C27F118D71` | [checkout-b](services/checkout-b.md) |
+| `cart-spa` | `cart-spa` | `SERVICE-4AE05397219E7068` | [cart-spa](services/cart-spa.md) |
+| `purchase-app` | `purchaseapp` | `SERVICE-271E3BD4C197C4E5` | [purchase-app](services/purchase-app.md) |
+| `chewy-portal` | `chewy-portal` | `SERVICE-7534E417EEEFFB45` | [chewy-portal](services/chewy-portal.md) |
 
-Read the linked notes only when debugging that logical service. Add one entity ID per newly verified logical service; keep service-specific behavior out of this index.
+Treat an entity ID as a seed, not an environment selector or permanent identity. Validate it in the selected context, fall back to the exact tagged telemetry name when it has no data, and rank duplicate active IDs by request volume and workload or pod identity. Read the linked notes only when debugging that logical service; keep service-specific behavior out of this index.
