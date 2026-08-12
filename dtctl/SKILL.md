@@ -21,31 +21,7 @@ dtctl config describe-context "$DT_CONTEXT" --plain
 dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
-Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
-
-When the user explicitly asks to refresh this workstation's credentials, reload `.zshrc`, store separate `nonprod-token` and `prod-token` Keychain credentials, and bind them to read-only contexts. Use `DTCTL_NONPROD_ENVIRONMENT` with `DT_NONPROD_PLATFORM_TOKEN`, and `DTCTL_PROD_ENVIRONMENT` with `DT_PROD_PLATFORM_TOKEN`. Disable shell tracing and never print token values.
-
-```bash
-set +x
-source ~/.zshrc
-[[ -n "${DTCTL_NONPROD_ENVIRONMENT:-}" ]] || { print -u2 'DTCTL_NONPROD_ENVIRONMENT is not set'; exit 1; }
-[[ -n "${DTCTL_PROD_ENVIRONMENT:-}" ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT is not set'; exit 1; }
-[[ -n "${DT_NONPROD_PLATFORM_TOKEN:-}" ]] || { print -u2 'DT_NONPROD_PLATFORM_TOKEN is not set'; exit 1; }
-[[ -n "${DT_PROD_PLATFORM_TOKEN:-}" ]] || { print -u2 'DT_PROD_PLATFORM_TOKEN is not set'; exit 1; }
-[[ "$DTCTL_NONPROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_NONPROD_ENVIRONMENT must be an https URL'; exit 1; }
-[[ "$DTCTL_PROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT must be an https URL'; exit 1; }
-dtctl config set-credentials nonprod-token --token "$DT_NONPROD_PLATFORM_TOKEN" --plain
-dtctl config set-credentials prod-token --token "$DT_PROD_PLATFORM_TOKEN" --plain
-dtctl config set-context nonprod --environment "$DTCTL_NONPROD_ENVIRONMENT" --token-ref nonprod-token --safety-level readonly --description 'Nonproduction: stg, qat, dev' --plain
-dtctl config set-context prod --environment "$DTCTL_PROD_ENVIRONMENT" --token-ref prod-token --safety-level readonly --description 'Production: prd' --plain
-dtctl --context nonprod auth status --plain
-dtctl --context prod auth status --plain
-dtctl --context nonprod query 'fetch dt.entity.service | fields id | limit 1' --default-scan-limit-gbytes 1 -o json --plain
-dtctl --context prod query 'fetch dt.entity.service | fields id | limit 1' --default-scan-limit-gbytes 1 -o json --plain
-dtctl config use-context nonprod --plain
-```
-
-Treat both contexts as read-only even if a token has broader server-side permissions. Do not delete or overwrite legacy credentials unless the user explicitly asks; moving the named contexts to their dedicated token references is sufficient.
+Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
 Resolve an exact service name to its entity ID before querying telemetry. If more than one record matches, disambiguate before continuing.
 
@@ -150,13 +126,13 @@ For `[stg][use1]sf-item` in nonproduction:
 - Resolve the service name to `SERVICE-E8F750E0328DD297`; filtering logs by this entity ID is selective and reliable.
 - The logs populate `trace_id` and `span_id`. The similarly named `trace.id` and `span.id` fields are null on these log records, and `service.name` is also null.
 - Request lifecycle records such as `received_request` and `processed_request` can share the same trace and span IDs, so an exact `trace_id` pivot connects them without reading full log content.
-- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after the `nonprod-token` Keychain credential was refreshed from `DT_NONPROD_PLATFORM_TOKEN`. Probe capabilities instead of inferring them from the `platform token` auth type.
+- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after the dedicated nonproduction credential was refreshed. Probe capabilities instead of inferring them from the `platform token` auth type.
 
 For `[stg][use1]agentic-commerce-notifier` in nonproduction:
 
 - Resolve the service name to `SERVICE-96B2F23C4556A54F`, but do not rely on that ID for its logs: sampled records had null `dt.entity.service` and `service.name`.
 - Use the exact workload `[stg][use1]agentic-commerce-notifier` to retrieve logs. Sampled records also had null `trace_id`, `span_id`, `trace.id`, and `span.id`, with no trace/span marker names in message text.
-- The `DT_NONPROD_PLATFORM_TOKEN` credential can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
+- The `nonprod` context can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
 - An exact trace-ID pivot connected notifier spans to spans and logs from other services. Because the notifier's own logs lacked IDs, they were not natively associated with those spans in the trace view. Build a separate mapping for notifier-local logs using exact pod plus the smallest span-time window, and distinguish that supporting evidence from an exact ID join.
 
 For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
