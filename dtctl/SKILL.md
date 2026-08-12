@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Investigate Dynatrace services with dtctl by selecting the correct nonprod or prod context, locating traffic cheaply through request-count metrics, and then running safe, bounded log and trace queries. Use for log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
+description: Investigate Dynatrace services with dtctl by selecting the correct nonprod or prod context, locating traffic and failures cheaply through metric dimensions, and then running safe, bounded or sampled log and trace queries. Use for error analysis over short or long time ranges, log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
 ---
 
 # Dynatrace investigation with dtctl
@@ -30,40 +30,79 @@ dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter ent
 dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
-## Find traffic cheaply first
+## Find traffic and failures cheaply first
 
-Use `dt.service.request.count` before fetching logs or spans for a resolved service. Metrics are substantially cheaper for locating traffic; raw telemetry is for drilling into the small active window the metric identifies.
+Use `dt.service.request.count` before fetching logs or spans for a resolved service. Metrics are substantially cheaper for locating traffic and failure hotspots; raw telemetry is for classifying errors and retrieving representative evidence.
 
-Skip the metric step only when the user already supplied an exact trace/request ID with a narrow window, or when the target has no service entity or request-count metric. In the latter case, start with an exact workload and a 15-minute log window.
+Do not assume that failures use a separate metric key. Inspect the metric catalog for the exact service first. In span-derived service metrics, `dt.service.request.count` can expose a boolean `failed` dimension plus dimensions such as `endpoint.name`. Treat dimensions as tenant- and service-specific: use only fields returned by the catalog query.
+
+Skip the metric step only when the user already supplied an exact trace/request ID with a narrow window, or when the target has no service entity or request-count metric. In the latter case, use the exact workload and apply the raw-data sampling workflow below for a large requested range.
 
 ```bash
 # Recent activity at one-minute resolution.
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-15m | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
 
-# A user-approved historical window at coarse resolution.
+# A historical window at coarse resolution.
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-24h | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
+
+# Discover whether request count exposes failure and ranking dimensions.
+dtctl --context "$DT_CONTEXT" query 'metrics | filter metric.key == "dt.service.request.count" | filter dt.entity.service == "SERVICE-xxx" | fields metric.key, failed, endpoint.name, dt.entity.service, service.name, dt.metrics.source | dedup failed, endpoint.name | sort failed desc, endpoint.name asc | limit 100' -o json --plain
+
+# Find failure hotspots across a large requested range without scanning raw spans or logs.
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-7d | fields timeframe, interval, failures | limit 20' -o json --plain
+
+# Rank metric dimensions across the requested range. Replace endpoint.name only with a
+# dimension confirmed by the metric-catalog query.
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, by:{endpoint.name}, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-7d | fieldsAdd failures_total=arraySum(failures) | fields endpoint.name, failures_total | sort failures_total desc | limit 20' -o json --plain
 ```
 
 Use the metric in this order:
 
 1. Match its timeframe to the user's requested investigation window.
-2. Start with `interval:1m` for a short window or `interval:15m` for a day-scale window.
-3. Identify the latest active or above-baseline interval. Health checks can create a steady nonzero baseline, so do not assume every nonzero interval is user traffic.
-4. Repeat the metric at one-minute resolution around a coarse candidate.
-5. Fetch raw logs or spans only for that minute or the smallest incident window that answers the question.
+2. Inspect `metrics` for the exact service to discover `failed` and available grouping dimensions.
+3. For error investigations, chart `failed == true` at a resolution appropriate to the range: one minute for short incidents, 15 minutes for day-scale windows, and one hour or coarser for week-scale windows.
+4. Rank confirmed dimensions such as `endpoint.name` by total failures. Use request volume as a denominator when the question concerns failure rate rather than failure count.
+5. For one incident, refine a peak interval to one-minute resolution and drill into it. For analysis over a large time range, retain the requested range and use the sampling workflow below before selecting narrower examples.
 
-If the metric has no data, do not conclude that no logs exist. A service entity can exist while logs lack `dt.entity.service`; retry with the exact Kubernetes workload after keeping the raw time window narrow.
+The `failed` metric dimension represents failed service requests derived from spans; it is not a count of `ERROR` log records. Likewise, `endpoint.name` can describe an inbound operation rather than a downstream service or GraphQL subgraph. Do not relabel an endpoint as a subgraph unless telemetry establishes that mapping. Use metrics for exact counts, rates, rankings, and time selection; use sampled spans or logs to identify error types and supporting examples.
+
+If the metric has no data, do not conclude that no logs exist. A service entity can exist while logs lack `dt.entity.service`; retry with the exact Kubernetes workload. Keep a short incident window bounded, or sample across the full range for a large-range analysis.
 
 ## Required query controls
 
 Every `fetch logs` or `fetch spans` query must:
 
-1. Use the small active time range identified by the request-count metric—start with one minute and widen only when necessary.
+1. Use either a small metric-selected incident window or an explicit sampling ratio over a large user-requested analysis window.
 2. Filter on a selective target such as an exact `dt.entity.service`, `trace_id`, `trace.id`, `k8s.namespace.name`, `k8s.workload.name`, or `host.name` before sorting or aggregation.
 3. Return only fields needed for the next step and end with `limit 20` (never over 100 without a reason).
 4. Use `--default-scan-limit-gbytes 5` and `-o json --plain` when executing.
 
-A result limit does not limit Grail scan cost. A request-count metric can locate traffic across a broader requested window without scanning raw telemetry. Before a raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 20 GB, explain the cost and get the user's approval first. If the scan limit is hit, return to the metric and narrow the raw time range or filter—do not raise the cap without approval.
+A result limit does not limit Grail scan cost. A request-count metric can locate failures across a broad window without scanning raw telemetry. Before an **unsampled** raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 20 GB, explain the cost and get the user's approval first. Do not raise the scan cap without approval.
+
+## Sample raw errors over large ranges
+
+When the user asks to analyze or rank errors over a large time range, do not answer from only the latest or busiest minute. Keep the requested timeframe and introduce sampling after the metric pass:
+
+1. Run the raw query over the full requested range with `--default-sampling-ratio 10`; use powers of ten and increase to `100`, `1000`, or higher if the 5 GB scan cap is reached.
+2. Include `--metadata=scannedBytes,sampled,analysisTimeframe` and confirm `sampled` is `true` and `analysisTimeframe` matches the requested range.
+3. Use the full-range sample to discover error schemas, recurring types, and candidate subgraph or dependency fields.
+4. Stratify follow-up evidence using the metric timeline: sample at least a peak-failure interval and a normal-baseline interval; for multi-day ranges also cover early and late portions or relevant deployment boundaries.
+5. Use exact metrics for totals and rates. Label counts or rankings computed from sampled raw records as approximate, state the sampling ratio, and do not extrapolate rare-error counts unless the sampling design supports it.
+6. After classifying error types, use selective exact fields such as endpoint, subgraph, error type, trace ID, or pod to retrieve small unsampled examples when needed.
+
+Sampling reduces scan cost while preserving coverage of the requested period. If a sampled query still reaches the cap, increase the sampling ratio before narrowing the timeframe. Narrow the timeframe only for incident drilldown, exact examples, or when sampling cannot answer the question.
+
+```bash
+# Sample error logs across a large requested range. Use the exact service entity when
+# log enrichment is reliable; otherwise use the exact workload.
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-7d | filter k8s.workload.name == "EXACT-WORKLOAD" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-sampling-ratio 100 --default-scan-limit-gbytes 5 --metadata=scannedBytes,sampled,analysisTimeframe -o json --plain
+
+# Approximate a top list only after discovering structured fields in the sample.
+# Replace the placeholders with fields actually present in the sampled telemetry.
+dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-7d | filter dt.entity.service == "SERVICE-xxx" | filter span.status_code == "ERROR" | summarize sampled_errors=count(), by:{`DISCOVERED-SUBGRAPH-FIELD`, `DISCOVERED-ERROR-TYPE-FIELD`} | sort sampled_errors desc | limit 20' --default-sampling-ratio 100 --default-scan-limit-gbytes 5 --metadata=scannedBytes,sampled,analysisTimeframe -o json --plain
+```
+
+Sampling can miss rare events and can distort rankings when records have unequal inclusion behavior. Present sampled raw results as classification evidence, not exact population counts. If the metric catalog already exposes the desired grouping dimension, prefer its exact metric ranking over a sampled raw aggregation.
 
 Validate unfamiliar DQL before executing it:
 
@@ -142,6 +181,13 @@ For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
 - Filter HTTP root spans with `request.is_root_span == true`. The captured request ID is in the string-array field `http.request.header.x-request-id`; sampled top-level `x-request-id` and `request_attribute.x-request-id` fields were null.
 - Sampled logs had `trace_id` and `span_id` values matching the trace and root-span IDs. Reuse this native mapping: the orchestrator logs are already available from the corresponding trace/span, so query them by exact IDs instead of building a pod/time mapping. Logs exposed trace/span IDs but not the captured header field.
 
+For `[prd][use1]chewy-api-router` in production:
+
+- Resolve the service name to `SERVICE-592C600D2FAD64FA`. Its `dt.service.request.count` metric exposes `failed` and `endpoint.name`; use `failed == true` for exact failure trends and rankings before raw telemetry.
+- Treat `endpoint.name` values such as GraphQL query and mutation names as router operations, not confirmed downstream subgraph names.
+- Use the exact workload `[prd][use1]chewy-api-router` for logs that lack `dt.entity.service`, `service.name`, `trace_id`, and `span_id` enrichment.
+- High traffic can exhaust a 5 GB scan cap in an unsampled minute of spans or 15 minutes of logs. A `--default-sampling-ratio 100` workload log query completed below the cap and reported `sampled: true`; retain the requested large range and increase sampling before narrowing it.
+
 ## Other useful patterns
 
 ```bash
@@ -151,8 +197,8 @@ dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter dt.enti
 # A Kubernetes workload during a specific incident window
 dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-30m | filter k8s.namespace.name == "namespace" | filter k8s.workload.name == "workload" | fields timestamp, loglevel, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
-# Error count trend for a known service
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-1h | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | makeTimeseries errors=count(), interval:5m' --default-scan-limit-gbytes 5 -o json --plain
+# Failed-request trend for a known service; prefer this metric over scanning logs.
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:5m, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-1h | fields timeframe, interval, failures | limit 20' -o json --plain
 ```
 
 Use a known entity ID or exact workload/namespace; do not begin with a tenant-wide text search. Treat telemetry as potentially sensitive and include only necessary fields in commands and summaries.
