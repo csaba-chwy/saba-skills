@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Investigate Dynatrace services with dtctl by locating traffic cheaply through request-count metrics before running safe, bounded log and trace queries. Use for log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
+description: Investigate Dynatrace services with dtctl by selecting the correct nonprod or prod context, locating traffic cheaply through request-count metrics, and then running safe, bounded log and trace queries. Use for log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
 ---
 
 # Dynatrace investigation with dtctl
@@ -9,29 +9,25 @@ Use this skill for **read-only Grail investigation**. The configured identity ma
 
 ## Start safely
 
-```bash
-dtctl auth status --plain
-dtctl config current-context
-```
-
-Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
-
-When the user explicitly asks to refresh this workstation's nonproduction credential from `DT_PLATFORM_TOKEN`, reload `.zshrc`, replace the `my-token` Keychain credential, and explicitly map that token into the query process. Disable shell tracing and never print the value.
+Select the context from the service's leading environment tag before any query. Use `prod` only for `[prd]`; use `nonprod` for `[stg]`, `[qat]`, and `[dev]`. If the target has no recognized tag and the environment is not otherwise explicit, stop and ask instead of guessing. Never fall back across the production boundary.
 
 ```bash
-set +x
-source ~/.zshrc
-[[ -n "${DT_PLATFORM_TOKEN:-}" ]] || { print -u2 'DT_PLATFORM_TOKEN is not set'; exit 1; }
-dtctl config set-credentials my-token --token "$DT_PLATFORM_TOKEN" --plain
-export DTCTL_TOKEN="$DT_PLATFORM_TOKEN"
-dtctl auth status --plain
+case "$SERVICE_NAME" in
+  "[prd]"*) DT_CONTEXT=prod ;;
+  "[stg]"*|"[qat]"*|"[dev]"*) DT_CONTEXT=nonprod ;;
+  *) print -u2 'Cannot determine Dynatrace context from service name'; exit 1 ;;
+esac
+dtctl config describe-context "$DT_CONTEXT" --plain
+dtctl --context "$DT_CONTEXT" auth status --plain
 ```
+
+Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
 Resolve an exact service name to its entity ID before querying telemetry. If more than one record matches, disambiguate before continuing.
 
 ```bash
-dtctl verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
-dtctl query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
+dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
 ## Find traffic cheaply first
@@ -42,10 +38,10 @@ Skip the metric step only when the user already supplied an exact trace/request 
 
 ```bash
 # Recent activity at one-minute resolution.
-dtctl query 'timeseries requests=sum(dt.service.request.count), interval:1m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-15m | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-15m | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
 
 # A user-approved historical window at coarse resolution.
-dtctl query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-24h | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-24h | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
 ```
 
 Use the metric in this order:
@@ -72,7 +68,7 @@ A result limit does not limit Grail scan cost. A request-count metric can locate
 Validate unfamiliar DQL before executing it:
 
 ```bash
-dtctl verify query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --plain
+dtctl --context "$DT_CONTEXT" verify query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --plain
 ```
 
 Read the full verifier output. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` diagnostics as validation failures even if the command also prints `Query is valid` and exits successfully.
@@ -92,27 +88,27 @@ Reuse a confirmed native mapping for the rest of the investigation. Re-probe aft
 
 ```bash
 # Find log-side correlation IDs in the metric-selected window.
-dtctl query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter dt.entity.service == "SERVICE-xxx" | fields timestamp, loglevel, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter dt.entity.service == "SERVICE-xxx" | fields timestamp, loglevel, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Retry by exact workload when logs lack service-entity enrichment.
-dtctl query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter k8s.workload.name == "EXACT-WORKLOAD" | fields timestamp, loglevel, trace_id, span_id, dt.entity.service, service.name, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter k8s.workload.name == "EXACT-WORKLOAD" | fields timestamp, loglevel, trace_id, span_id, dt.entity.service, service.name, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Probe native mapping more selectively after choosing one representative span.
-dtctl query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Pivot from one exact log trace ID to its spans.
-dtctl verify query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --plain
-dtctl query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" verify query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --plain
+dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Find all logs carrying that exact trace ID, including other services when present.
-dtctl query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter trace_id == "TRACE-ID" | fields timestamp, loglevel, trace_id, span_id, dt.entity.service, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter trace_id == "TRACE-ID" | fields timestamp, loglevel, trace_id, span_id, dt.entity.service, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # When native IDs are absent, map one selected span to logs by exact pod and a tight
 # interval computed locally from span start_time, duration, and a small clock-skew margin.
-dtctl query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, loglevel, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, loglevel, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Find HTTP root spans with a captured X-Request-ID header in one narrow window.
-dtctl query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter dt.entity.service == "SERVICE-xxx" | filter request.is_root_span == true | filter isNotNull(`http.request.header.x-request-id`) | fields start_time, trace.id, span.id, span.name, span.kind, `http.request.header.x-request-id`, http.request.method, http.route, k8s.pod.name | sort start_time desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter dt.entity.service == "SERVICE-xxx" | filter request.is_root_span == true | filter isNotNull(`http.request.header.x-request-id`) | fields start_time, trace.id, span.id, span.name, span.kind, `http.request.header.x-request-id`, http.request.method, http.route, k8s.pod.name | sort start_time desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
 Log `trace_id` is a string, while span `trace.id` is a UID; use `toUid("TRACE-ID")` for the span-side comparison. Spans use `start_time`, while logs use `timestamp`. Correlate records locally by exact trace ID and then exact span ID. Use time only to order exact matches or as the explicitly labeled fallback when native IDs are absent. Do not force a server-side join unless separate bounded pivots are insufficient, because a join can substantially increase scan cost. Include `content` only when the message text is necessary; it can contain customer or request data.
@@ -130,13 +126,13 @@ For `[stg][use1]sf-item` in nonproduction:
 - Resolve the service name to `SERVICE-E8F750E0328DD297`; filtering logs by this entity ID is selective and reliable.
 - The logs populate `trace_id` and `span_id`. The similarly named `trace.id` and `span.id` fields are null on these log records, and `service.name` is also null.
 - Request lifecycle records such as `received_request` and `processed_request` can share the same trace and span IDs, so an exact `trace_id` pivot connects them without reading full log content.
-- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after `my-token` was reloaded from `DT_PLATFORM_TOKEN`. Probe capabilities instead of inferring them from the `platform token` auth type.
+- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after the dedicated nonproduction credential was refreshed. Probe capabilities instead of inferring them from the `platform token` auth type.
 
 For `[stg][use1]agentic-commerce-notifier` in nonproduction:
 
 - Resolve the service name to `SERVICE-96B2F23C4556A54F`, but do not rely on that ID for its logs: sampled records had null `dt.entity.service` and `service.name`.
 - Use the exact workload `[stg][use1]agentic-commerce-notifier` to retrieve logs. Sampled records also had null `trace_id`, `span_id`, `trace.id`, and `span.id`, with no trace/span marker names in message text.
-- The `DT_PLATFORM_TOKEN` credential can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
+- The `nonprod` context can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
 - An exact trace-ID pivot connected notifier spans to spans and logs from other services. Because the notifier's own logs lacked IDs, they were not natively associated with those spans in the trace view. Build a separate mapping for notifier-local logs using exact pod plus the smallest span-time window, and distinguish that supporting evidence from an exact ID join.
 
 For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
@@ -150,13 +146,13 @@ For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
 
 ```bash
 # Recent errors for one service
-dtctl query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # A Kubernetes workload during a specific incident window
-dtctl query 'fetch logs, from:now()-30m | filter k8s.namespace.name == "namespace" | filter k8s.workload.name == "workload" | fields timestamp, loglevel, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-30m | filter k8s.namespace.name == "namespace" | filter k8s.workload.name == "workload" | fields timestamp, loglevel, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Error count trend for a known service
-dtctl query 'fetch logs, from:now()-1h | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | makeTimeseries errors=count(), interval:5m' --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-1h | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | makeTimeseries errors=count(), interval:5m' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
 Use a known entity ID or exact workload/namespace; do not begin with a tenant-wide text search. Treat telemetry as potentially sensitive and include only necessary fields in commands and summaries.
