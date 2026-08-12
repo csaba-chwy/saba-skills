@@ -23,7 +23,7 @@ dtctl --context "$DT_CONTEXT" auth status --plain
 
 Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
-Resolve an exact service name to its entity ID before querying telemetry. If more than one record matches, disambiguate before continuing.
+Resolve an exact service name to its entity ID before querying telemetry. First apply the context-aware known-mapping workflow below; if it has no exact environment-and-region entry, run the discovery query. If more than one record matches, disambiguate before continuing.
 
 ```bash
 dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
@@ -160,7 +160,9 @@ If both structured correlation fields and message-level trace/span markers are a
 
 ### Known service mappings
 
-Check [mappings.md](mappings.md) for exact known service-name-to-entity-ID mappings before running a discovery query. When the target has a linked service-specific file, read only that file for its verified debugging behavior; do not load notes for unrelated services. Re-resolve the service name if a mapping is missing, returns no data, or conflicts with current telemetry.
+Normalize the target to a logical service name by removing its leading environment and region tags; for example, normalize `[stg][use1]agentic-commerce-notifier` to `agentic-commerce-notifier`. Use the logical name only to look up [mappings.md](mappings.md), never as a telemetry filter.
+
+In the matching row, use only the `prod` or `nonprod` column selected from the original environment tag, then require an exact environment-and-region entry within that column. Never reuse an entity ID across contexts or for a different tag pair. Run the exact-name discovery query when no scoped entry exists, the mapped ID returns no data, or current telemetry conflicts with it. Read only the linked logical-service file for service-specific debugging guidance and re-probe its telemetry assumptions in the target environment.
 
 ## Other useful patterns
 

@@ -1,10 +1,12 @@
 # Known Dynatrace service mappings
 
-Use a mapping only for an exact service-name and environment match. Read the linked service notes only when debugging that service. If a known entity ID returns no data or conflicts with current telemetry, resolve the exact service name again and update this mapping plus its service file when the new behavior is verified.
+Remove the leading environment and region tags from the target before matching the logical service name. Select the column from the environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Within that column, use an entity ID only when its environment and region exactly match the target. A dash means to resolve the full tagged service name dynamically.
 
-| Service name | Context | Service entity ID | Debugging notes |
+| Logical service | `nonprod` entity IDs | `prod` entity IDs | Debugging notes |
 | --- | --- | --- | --- |
-| `[stg][use1]sf-item` | `nonprod` | `SERVICE-E8F750E0328DD297` | [sf-item](services/stg-use1-sf-item.md) |
-| `[stg][use1]agentic-commerce-notifier` | `nonprod` | `SERVICE-96B2F23C4556A54F` | [agentic-commerce-notifier](services/stg-use1-agentic-commerce-notifier.md) |
-| `[stg][use1]agentic-commerce-orchestrator` | `nonprod` | `SERVICE-E5986BAFC3F56E4C` | [agentic-commerce-orchestrator](services/stg-use1-agentic-commerce-orchestrator.md) |
-| `[prd][use1]chewy-api-router` | `prod` | `SERVICE-592C600D2FAD64FA` | [chewy-api-router](services/prd-use1-chewy-api-router.md) |
+| `sf-item` | `[stg][use1]`: `SERVICE-E8F750E0328DD297` | — | [sf-item](services/sf-item.md) |
+| `agentic-commerce-notifier` | `[stg][use1]`: `SERVICE-96B2F23C4556A54F` | — | [agentic-commerce-notifier](services/agentic-commerce-notifier.md) |
+| `agentic-commerce-orchestrator` | `[stg][use1]`: `SERVICE-E5986BAFC3F56E4C` | — | [agentic-commerce-orchestrator](services/agentic-commerce-orchestrator.md) |
+| `chewy-api-router` | — | `[prd][use1]`: `SERVICE-592C600D2FAD64FA` | [chewy-api-router](services/chewy-api-router.md) |
+
+Read the linked notes only when debugging that logical service. Add newly verified entity IDs to the appropriate context column with their exact environment and region; keep service-specific behavior out of this index.
