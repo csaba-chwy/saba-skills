@@ -36,6 +36,28 @@ Group the first result by `k8s.workload.name` for logs or `service.name` for met
 
 Do not substitute `dt.entity.service.name` for the metric selector without inspecting it. In validated services, `dt.entity.service.name` was null on logs and request-count metric rows, and the custom `env` field was null on request-count metrics. The paired log fields and tagged metric `service.name` were the reliable selectors.
 
+### Filter by region
+
+Distinguish the deployment region (`use1`, `use2`) from the cloud region (`us-east-1`, `us-east-2`). Probe both namespaces before relating them; do not assume the mapping is universal.
+
+- Metrics: filter deployment region through the tagged `service.name`, because the native `region` dimension can be null. Add `contains(service.name, "[REGION]")` to the logical metric selector and retain `service.name` in the first grouped result.
+- Logs: keep `log.source` plus `env` as the logical-service selector. Filter deployment region with `contains(k8s.workload.name, "[REGION]")`; filter cloud region with `region == "CLOUD-REGION"` only after confirming it is populated.
+- Spans: filter deployment region through the tagged `k8s.workload.name`; filter cloud region with `cloud.region == "CLOUD-REGION"` only after confirming it is populated. Do not rely on `dt.entity.service.name` for region selection.
+
+When multiple regions are requested, query them together and group by the tagged service or workload field. Do not issue one happy-path query per region merely to add the results locally. Use an `or` expression only when the requested region set is narrower than all regions returned by the logical-service selector.
+
+```bash
+# One metric query for one deployment region; omit contains(...) to return every region.
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count, scalar:true), by:{service.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and contains(service.name, "[REGION]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:-15m | fields service.name, requests | limit 20' -o json --plain
+
+# Logs by deployment region. Replace the workload filter with region == "CLOUD-REGION"
+# only after a grouped probe confirms the cloud-region field.
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT" | filter contains(k8s.workload.name, "[REGION]") | fields timestamp, k8s.workload.name, region, loglevel, trace_id, span_id | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+
+# Spans by deployment region. Add cloud.region == "CLOUD-REGION" only after probing it.
+dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-15m | filter startsWith(k8s.workload.name, "[ENVIRONMENT]") and contains(k8s.workload.name, "[REGION]") and endsWith(k8s.workload.name, "]TELEMETRY-STEM") | fields start_time, k8s.workload.name, cloud.region, trace.id, span.id, span.name | sort start_time desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+```
+
 Resolve an exact telemetry service name to its entity ID only when the logical selector is absent or ambiguous, or when a span query requires `dt.entity.service`. Use the mapped entity ID as a seed; if it has no data in the selected context, run exact-name discovery. If more than one record matches, disambiguate before continuing.
 
 ```bash
