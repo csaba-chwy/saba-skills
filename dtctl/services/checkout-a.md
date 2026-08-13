@@ -1,6 +1,6 @@
 # `checkout-a`
 
-Observed in production and staging `use1` telemetry on 2026-08-12; re-probe current enrichment before relying on it.
+Observed in live telemetry on 2026-08-12; re-probe current enrichment before relying on it.
 
 - Use the exact tagged `checkout-a` name and workload. Exact-name discovery can return low-traffic duplicate IDs; prefer the entity carrying current request volume.
 - Request-count metrics expose `failed`, `endpoint.name`, HTTP method/status, workload, and version dimensions.

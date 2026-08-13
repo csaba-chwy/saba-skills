@@ -23,7 +23,42 @@ dtctl --context "$DT_CONTEXT" auth status --plain
 
 Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
-Resolve an exact telemetry service name to its entity ID before querying telemetry. First apply the logical-service known-mapping workflow below; mappings can provide a telemetry-name alias as well as an entity-ID seed. If no mapping exists or the seed returns no data in the selected context, run the discovery query.
+Normalize the target into an environment tag, environment value, and telemetry stem before querying. For example, `[stg][use1]agentic-commerce-orchestrator` becomes `[stg]`, `stg`, and `agentic-commerce-orchestrator`. Read [mappings.md](mappings.md) for aliases such as `purchase-app` to `purchaseapp`.
+
+Use one logical-service selector across regions on the happy path:
+
+- Logs: `log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT"`.
+- Metrics: `startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")`.
+
+Keep this shared selector contract in `SKILL.md`. Service mapping files provide only the telemetry stem and environment-neutral service behavior; never hard-code an environment value or repeat the common log selector in a service mapping.
+
+Group the first result by `k8s.workload.name` for logs or `service.name` for metrics and confirm that every returned value belongs to the requested environment and logical service. The selector may intentionally return both `use1` and `use2`; aggregate them in the same query when the user wants a cross-region total. If an unexpected workload or service name appears, switch to an explicit allowlist of the expected tagged names instead of silently including it.
+
+Do not substitute `dt.entity.service.name` for the metric selector without inspecting it. In validated services, `dt.entity.service.name` was null on logs and request-count metric rows, and the custom `env` field was null on request-count metrics. The paired log fields and tagged metric `service.name` were the reliable selectors.
+
+### Filter by region
+
+Distinguish the deployment region (`use1`, `use2`) from the cloud region (`us-east-1`, `us-east-2`). Probe both namespaces before relating them; do not assume the mapping is universal.
+
+- Metrics: filter deployment region through the tagged `service.name`, because the native `region` dimension can be null. Add `contains(service.name, "[REGION]")` to the logical metric selector and retain `service.name` in the first grouped result.
+- Logs: keep `log.source` plus `env` as the logical-service selector. Filter deployment region with `contains(k8s.workload.name, "[REGION]")`; filter cloud region with `region == "CLOUD-REGION"` only after confirming it is populated.
+- Spans: filter deployment region through the tagged `k8s.workload.name`; filter cloud region with `cloud.region == "CLOUD-REGION"` only after confirming it is populated. Do not rely on `dt.entity.service.name` for region selection.
+
+When multiple regions are requested, query them together and group by the tagged service or workload field. Do not issue one happy-path query per region merely to add the results locally. Use an `or` expression only when the requested region set is narrower than all regions returned by the logical-service selector.
+
+```bash
+# One metric query for one deployment region; omit contains(...) to return every region.
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count, scalar:true), by:{service.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and contains(service.name, "[REGION]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:-15m | fields service.name, requests | limit 20' -o json --plain
+
+# Logs by deployment region. Replace the workload filter with region == "CLOUD-REGION"
+# only after a grouped probe confirms the cloud-region field.
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT" | filter contains(k8s.workload.name, "[REGION]") | fields timestamp, k8s.workload.name, region, loglevel, trace_id, span_id | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+
+# Spans by deployment region. Add cloud.region == "CLOUD-REGION" only after probing it.
+dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-15m | filter startsWith(k8s.workload.name, "[ENVIRONMENT]") and contains(k8s.workload.name, "[REGION]") and endsWith(k8s.workload.name, "]TELEMETRY-STEM") | fields start_time, k8s.workload.name, cloud.region, trace.id, span.id, span.name | sort start_time desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+```
+
+Resolve an exact telemetry service name to its entity ID only when the logical selector is absent or ambiguous, or when a span query requires `dt.entity.service`. Use the mapped entity ID as a seed; if it has no data in the selected context, run exact-name discovery. If more than one record matches, disambiguate before continuing.
 
 ```bash
 dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
@@ -33,53 +68,53 @@ dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.nam
 An exact name can resolve to multiple active entities, including separate traffic classes under one workload. Rank candidates over the investigation window with `dt.service.request.count`; inspect pod, process, or workload identity in a small span sample when more than one candidate remains active. Do not select the first entity arbitrarily, and retain multiple IDs when the question spans multiple traffic classes.
 
 ```bash
-dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1h, by:{dt.entity.service, service.name}, filter:{service.name == "SERVICE-NAME"}, from:-24h | fields dt.entity.service, service.name, requests_total=arraySum(requests) | sort requests_total desc | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1h, by:{dt.entity.service, service.name}, filter:{service.name == "EXACT-TAGGED-SERVICE"}, from:-24h | fields dt.entity.service, service.name, requests_total=arraySum(requests) | sort requests_total desc | limit 20' -o json --plain
 ```
 
 ## Find traffic and failures cheaply first
 
-Use `dt.service.request.count` before fetching logs or spans for a resolved service. Metrics are substantially cheaper for locating traffic and failure hotspots; raw telemetry is for classifying errors and retrieving representative evidence.
+Use `dt.service.request.count` before fetching logs or spans for a logical service. Metrics are substantially cheaper for locating traffic and failure hotspots; raw telemetry is for classifying errors and retrieving representative evidence.
 
-Do not assume that failures use a separate metric key. Inspect the metric catalog for the exact service first. In span-derived service metrics, `dt.service.request.count` can expose a boolean `failed` dimension plus dimensions such as `endpoint.name`. Treat dimensions as tenant- and service-specific: use only fields returned by the catalog query.
+Do not assume that failures use a separate metric key. Inspect the metric catalog for the logical service first. In span-derived service metrics, `dt.service.request.count` can expose a boolean `failed` dimension plus dimensions such as `endpoint.name`. Treat dimensions as tenant- and service-specific: use only fields returned by the catalog query.
 
-Skip the metric step only when the user already supplied an exact trace/request ID with a narrow window, or when the target has no service entity or request-count metric. In the latter case, use the exact workload and apply the raw-data sampling workflow below for a large requested range.
+Skip the metric step only when the user already supplied an exact trace/request ID with a narrow window, or when the target has no request-count metric. In the latter case, use the logical log selector or exact workload and apply the raw-data sampling workflow below for a large requested range.
 
 ```bash
-# Recent activity at one-minute resolution.
-dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-15m | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
+# Recent activity at one-minute resolution across the environment's regions.
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1m, by:{service.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:-15m | fields timeframe, interval, service.name, requests | limit 20' -o json --plain
 
 # A historical window at coarse resolution.
-dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{dt.entity.service}, filter:{dt.entity.service == "SERVICE-xxx"}, from:-24h | fields timeframe, interval, dt.entity.service, requests | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:-24h | fields timeframe, interval, requests | limit 20' -o json --plain
 
 # Discover whether request count exposes failure and ranking dimensions.
-dtctl --context "$DT_CONTEXT" query 'metrics | filter metric.key == "dt.service.request.count" | filter dt.entity.service == "SERVICE-xxx" | fields metric.key, failed, endpoint.name, dt.entity.service, service.name, dt.metrics.source | dedup failed, endpoint.name | sort failed desc, endpoint.name asc | limit 100' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'metrics | filter metric.key == "dt.service.request.count" | filter startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") | fields metric.key, failed, endpoint.name, dt.entity.service, service.name, dt.metrics.source | dedup service.name, failed, endpoint.name | sort service.name asc, failed desc, endpoint.name asc | limit 100' -o json --plain
 
 # Find failure hotspots across a large requested range without scanning raw spans or logs.
-dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-7d | fields timeframe, interval, failures | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") and failed == true}, from:-7d | fields timeframe, interval, failures | limit 20' -o json --plain
 
 # Rank metric dimensions across the requested range. Replace endpoint.name only with a
 # dimension confirmed by the metric-catalog query.
-dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, by:{endpoint.name}, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-7d | fieldsAdd failures_total=arraySum(failures) | fields endpoint.name, failures_total | sort failures_total desc | limit 20' -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:1h, by:{endpoint.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") and failed == true}, from:-7d | fieldsAdd failures_total=arraySum(failures) | fields endpoint.name, failures_total | sort failures_total desc | limit 20' -o json --plain
 ```
 
 Use the metric in this order:
 
 1. Match its timeframe to the user's requested investigation window.
-2. Inspect `metrics` for the exact service to discover `failed` and available grouping dimensions.
+2. Inspect `metrics` for the logical selector to discover `failed` and available grouping dimensions. Keep `service.name` in the first result to verify regional membership.
 3. For error investigations, chart `failed == true` at a resolution appropriate to the range: one minute for short incidents, 15 minutes for day-scale windows, and one hour or coarser for week-scale windows.
 4. Rank confirmed dimensions such as `endpoint.name` by total failures. Use request volume as a denominator when the question concerns failure rate rather than failure count.
 5. For one incident, refine a peak interval to one-minute resolution and drill into it. For analysis over a large time range, retain the requested range and use the sampling workflow below before selecting narrower examples.
 
 The `failed` metric dimension represents failed service requests derived from spans; it is not a count of `ERROR` log records. Likewise, `endpoint.name` can describe an inbound operation rather than a downstream service or GraphQL subgraph. Do not relabel an endpoint as a subgraph unless telemetry establishes that mapping. Use metrics for exact counts, rates, rankings, and time selection; use sampled spans or logs to identify error types and supporting examples.
 
-If the metric has no data, do not conclude that no logs exist. A service entity can exist while logs lack `dt.entity.service`; retry with the exact Kubernetes workload. Keep a short incident window bounded, or sample across the full range for a large-range analysis.
+If the metric has no data, do not conclude that no logs exist. Probe the paired `log.source` and `env` selector, then retry with the exact Kubernetes workload if those fields are absent. Keep a short incident window bounded, or sample across the full range for a large-range analysis.
 
 ## Required query controls
 
 Every `fetch logs` or `fetch spans` query must:
 
 1. Use either a small metric-selected incident window or an explicit sampling ratio over a large user-requested analysis window.
-2. Filter on a selective target such as an exact `dt.entity.service`, `trace_id`, `trace.id`, `k8s.namespace.name`, `k8s.workload.name`, or `host.name` before sorting or aggregation.
+2. Filter on a selective target such as paired `log.source` plus `env`, an exact `dt.entity.service`, `trace_id`, `trace.id`, `k8s.namespace.name`, `k8s.workload.name`, or `host.name` before sorting or aggregation.
 3. Return only fields needed for the next step and end with `limit 20` (never over 100 without a reason).
 4. Use `--default-scan-limit-gbytes 5` and `-o json --plain` when executing.
 
@@ -120,7 +155,7 @@ Read the full verifier output. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` dia
 
 ## Correlate logs and traces
 
-Start from the resolved service entity and inspect the structured correlation fields in the metric-selected window. If no logs appear, retry with the exact workload. Do not assume log and span field names are identical or populated.
+Start from the logical log selector and inspect the structured correlation fields in the metric-selected window. If no logs appear, retry with the exact workload. Resolve a service entity only when the next span query needs it. Do not assume log and span field names are identical or populated.
 
 After selecting a representative span, determine the mapping mode before doing a separate log search:
 
@@ -166,24 +201,24 @@ If both structured correlation fields and message-level trace/span markers are a
 
 ### Known service mappings
 
-Normalize the target to a logical service name by removing its leading environment and region tags; for example, normalize `[stg][use1]agentic-commerce-notifier` to `agentic-commerce-notifier`. Use the logical name only to look up [mappings.md](mappings.md), never directly as a workload or service-name filter. Use the row's telemetry stem when it differs from the logical name, preserving the target's original environment and region tags.
+Normalize the target to a logical service name by removing its leading environment and region tags; for example, normalize `[stg][use1]agentic-commerce-notifier` to `agentic-commerce-notifier`. Use [mappings.md](mappings.md) to obtain the telemetry stem. Use that stem directly with paired `log.source` and `env` filters, or as the suffix of the tagged metric `service.name`.
 
-Use the row's entity ID only as a discovery seed in the `prod` or `nonprod` context already selected from the original environment tag. Keep one environment- and region-neutral mapping list, but validate the seed against current telemetry: live entity IDs can differ by context, region, deployment lineage, or traffic class. Run exact-name discovery when no mapping exists, the seed returns no data, the exact name has multiple active IDs, or current telemetry conflicts with the mapping. Read only the linked logical-service file and re-probe its assumptions in the target environment.
+Use the row's entity ID only as a fallback discovery seed in the `prod` or `nonprod` context already selected from the original environment tag. Keep one environment- and region-neutral mapping list, but validate the seed against current telemetry: live entity IDs can differ by context, region, deployment lineage, or traffic class. Run exact-name discovery when a span query needs an entity and no mapping exists, the seed returns no data, the exact name has multiple active IDs, or current telemetry conflicts with the mapping. Read only the linked logical-service file and re-probe its assumptions in the target environment.
 
 ## Other useful patterns
 
 ```bash
-# Recent errors for one service
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+# Recent errors for one logical service across regions.
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # A Kubernetes workload during a specific incident window
 dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-30m | filter k8s.namespace.name == "namespace" | filter k8s.workload.name == "workload" | fields timestamp, loglevel, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
-# Failed-request trend for a known service; prefer this metric over scanning logs.
-dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:5m, filter:{dt.entity.service == "SERVICE-xxx" and failed == true}, from:-1h | fields timeframe, interval, failures | limit 20' -o json --plain
+# Failed-request trend for one logical service; prefer this metric over scanning logs.
+dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:5m, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") and failed == true}, from:-1h | fields timeframe, interval, failures | limit 20' -o json --plain
 ```
 
-Use a known entity ID or exact workload/namespace; do not begin with a tenant-wide text search. Treat telemetry as potentially sensitive and include only necessary fields in commands and summaries.
+Use paired logical-service fields, a known entity ID, or an exact workload/namespace; do not begin with a tenant-wide text search. Treat telemetry as potentially sensitive and include only necessary fields in commands and summaries.
 
 ## Out of scope
 

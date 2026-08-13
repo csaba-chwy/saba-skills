@@ -1,6 +1,8 @@
 # Known Dynatrace service mappings
 
-Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Preserve those tags when constructing an exact service or workload name from the telemetry stem.
+Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Use the telemetry stem with `log.source` plus `env` for logical log selection and as the suffix of tagged metric `service.name`; preserve the tags only when an exact workload, service name, or entity fallback is required.
+
+The logical selector templates live in [SKILL.md](SKILL.md). Keep every linked service note environment-neutral: it may document a telemetry stem alias or service-specific enrichment behavior, but it must not pin an environment or restate the shared log selector.
 
 | Logical service | Telemetry stem | Entity ID seed | Debugging notes |
 | --- | --- | --- | --- |
@@ -16,4 +18,4 @@ Remove the leading environment and region tags from the target before matching t
 | `purchase-app` | `purchaseapp` | `SERVICE-271E3BD4C197C4E5` | [purchase-app](services/purchase-app.md) |
 | `chewy-portal` | `chewy-portal` | `SERVICE-7534E417EEEFFB45` | [chewy-portal](services/chewy-portal.md) |
 
-Treat an entity ID as a seed, not an environment selector or permanent identity. Validate it in the selected context, fall back to the exact tagged telemetry name when it has no data, and rank duplicate active IDs by request volume and workload or pod identity. Read the linked notes only when debugging that logical service; keep service-specific behavior out of this index.
+Treat an entity ID as a fallback seed for spans or ambiguous enrichment, not an environment selector or permanent identity. Validate it in the selected context, fall back to exact-name discovery when it has no data, and rank duplicate active IDs by request volume and workload or pod identity. Read the linked notes only when debugging that logical service; keep service-specific behavior out of this index.
