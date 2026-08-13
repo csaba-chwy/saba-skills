@@ -23,11 +23,17 @@ dtctl --context "$DT_CONTEXT" auth status --plain
 
 Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
-Resolve an exact service name to its entity ID before querying telemetry. If more than one record matches, disambiguate before continuing.
+Resolve an exact telemetry service name to its entity ID before querying telemetry. First apply the logical-service known-mapping workflow below; mappings can provide a telemetry-name alias as well as an entity-ID seed. If no mapping exists or the seed returns no data in the selected context, run the discovery query.
 
 ```bash
 dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
 dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
+```
+
+An exact name can resolve to multiple active entities, including separate traffic classes under one workload. Rank candidates over the investigation window with `dt.service.request.count`; inspect pod, process, or workload identity in a small span sample when more than one candidate remains active. Do not select the first entity arbitrarily, and retain multiple IDs when the question spans multiple traffic classes.
+
+```bash
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1h, by:{dt.entity.service, service.name}, filter:{service.name == "SERVICE-NAME"}, from:-24h | fields dt.entity.service, service.name, requests_total=arraySum(requests) | sort requests_total desc | limit 20' -o json --plain
 ```
 
 ## Find traffic and failures cheaply first
@@ -150,7 +156,7 @@ dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", t
 dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter dt.entity.service == "SERVICE-xxx" | filter request.is_root_span == true | filter isNotNull(`http.request.header.x-request-id`) | fields start_time, trace.id, span.id, span.name, span.kind, `http.request.header.x-request-id`, http.request.method, http.route, k8s.pod.name | sort start_time desc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
-Log `trace_id` is a string, while span `trace.id` is a UID; use `toUid("TRACE-ID")` for the span-side comparison. Spans use `start_time`, while logs use `timestamp`. Correlate records locally by exact trace ID and then exact span ID. Use time only to order exact matches or as the explicitly labeled fallback when native IDs are absent. Do not force a server-side join unless separate bounded pivots are insufficient, because a join can substantially increase scan cost. Include `content` only when the message text is necessary; it can contain customer or request data.
+Log `trace_id` is a string, while span `trace.id` is a UID. Before using `toUid("TRACE-ID")`, confirm the log value is a 32-character hexadecimal trace UID; some applications populate `trace_id` with a shorter request or transaction identifier. Treat those values as application-local correlation keys, not trace IDs. Spans use `start_time`, while logs use `timestamp`. Correlate records locally by exact trace ID and then exact span ID. Use time only to order exact matches or as the explicitly labeled fallback when native IDs are absent. Do not force a server-side join unless separate bounded pivots are insufficient, because a join can substantially increase scan cost. Include `content` only when the message text is necessary; it can contain customer or request data.
 
 Captured HTTP headers use the `http.request.header.<lowercase-name>` namespace and can be arrays. For X-Request-ID, query the backticked field `http.request.header.x-request-id`; do not assume top-level `x-request-id` or `request_attribute.x-request-id` is populated. Treat captured header values as sensitive and omit their values from summaries unless the user explicitly needs them.
 
@@ -158,35 +164,11 @@ If the span query returns `NOT_AUTHORIZED_FOR_TABLE`, report that trace data cou
 
 If both structured correlation fields and message-level trace/span markers are absent, continue the log investigation using exact workload, pod, and timestamp filters. Report that log-to-trace correlation is unavailable for the sampled records; do not infer that the service emits no traces.
 
-### Verified service behavior
+### Known service mappings
 
-For `[stg][use1]sf-item` in nonproduction:
+Normalize the target to a logical service name by removing its leading environment and region tags; for example, normalize `[stg][use1]agentic-commerce-notifier` to `agentic-commerce-notifier`. Use the logical name only to look up [mappings.md](mappings.md), never directly as a workload or service-name filter. Use the row's telemetry stem when it differs from the logical name, preserving the target's original environment and region tags.
 
-- Resolve the service name to `SERVICE-E8F750E0328DD297`; filtering logs by this entity ID is selective and reliable.
-- The logs populate `trace_id` and `span_id`. The similarly named `trace.id` and `span.id` fields are null on these log records, and `service.name` is also null.
-- Request lifecycle records such as `received_request` and `processed_request` can share the same trace and span IDs, so an exact `trace_id` pivot connects them without reading full log content.
-- The original context credential returned `NOT_AUTHORIZED_FOR_TABLE` for `fetch spans`; span-table access succeeded after the dedicated nonproduction credential was refreshed. Probe capabilities instead of inferring them from the `platform token` auth type.
-
-For `[stg][use1]agentic-commerce-notifier` in nonproduction:
-
-- Resolve the service name to `SERVICE-96B2F23C4556A54F`, but do not rely on that ID for its logs: sampled records had null `dt.entity.service` and `service.name`.
-- Use the exact workload `[stg][use1]agentic-commerce-notifier` to retrieve logs. Sampled records also had null `trace_id`, `span_id`, `trace.id`, and `span.id`, with no trace/span marker names in message text.
-- The `nonprod` context can query notifier spans by `SERVICE-96B2F23C4556A54F`. Sampled spans represented SQS queue processing and exposed `start_time`, `trace.id`, `span.id`, workload, and pod fields.
-- An exact trace-ID pivot connected notifier spans to spans and logs from other services. Because the notifier's own logs lacked IDs, they were not natively associated with those spans in the trace view. Build a separate mapping for notifier-local logs using exact pod plus the smallest span-time window, and distinguish that supporting evidence from an exact ID join.
-
-For `[stg][use1]agentic-commerce-orchestrator` in nonproduction:
-
-- Resolve the service name to `SERVICE-E5986BAFC3F56E4C`. Its logs are retrieved reliably by exact workload and can populate `trace_id` and `span_id` even when `dt.entity.service` and `service.name` are null.
-- Start with `dt.service.request.count` for both recent and historical investigations, then query root spans in the active minute. A steady baseline was distinguishable from traffic spikes. A one-minute workload log probe can still reach the 5 GB cap, so use the selected span's exact pod and time interval, then pivot by returned exact IDs; do not widen the window or raise the cap.
-- Filter HTTP root spans with `request.is_root_span == true`. The captured request ID is in the string-array field `http.request.header.x-request-id`; sampled top-level `x-request-id` and `request_attribute.x-request-id` fields were null.
-- Sampled logs had `trace_id` and `span_id` values matching the trace and root-span IDs. Reuse this native mapping: the orchestrator logs are already available from the corresponding trace/span, so query them by exact IDs instead of building a pod/time mapping. Logs exposed trace/span IDs but not the captured header field.
-
-For `[prd][use1]chewy-api-router` in production:
-
-- Resolve the service name to `SERVICE-592C600D2FAD64FA`. Its `dt.service.request.count` metric exposes `failed` and `endpoint.name`; use `failed == true` for exact failure trends and rankings before raw telemetry.
-- Treat `endpoint.name` values such as GraphQL query and mutation names as router operations, not confirmed downstream subgraph names.
-- Use the exact workload `[prd][use1]chewy-api-router` for logs that lack `dt.entity.service`, `service.name`, `trace_id`, and `span_id` enrichment.
-- High traffic can exhaust a 5 GB scan cap in an unsampled minute of spans or 15 minutes of logs. A `--default-sampling-ratio 100` workload log query completed below the cap and reported `sampled: true`; retain the requested large range and increase sampling before narrowing it.
+Use the row's entity ID only as a discovery seed in the `prod` or `nonprod` context already selected from the original environment tag. Keep one environment- and region-neutral mapping list, but validate the seed against current telemetry: live entity IDs can differ by context, region, deployment lineage, or traffic class. Run exact-name discovery when no mapping exists, the seed returns no data, the exact name has multiple active IDs, or current telemetry conflicts with the mapping. Read only the linked logical-service file and re-probe its assumptions in the target environment.
 
 ## Other useful patterns
 
