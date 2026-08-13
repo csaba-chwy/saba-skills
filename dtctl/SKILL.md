@@ -30,6 +30,8 @@ Use one logical-service selector across regions on the happy path:
 - Logs: `log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT"`.
 - Metrics: `startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")`.
 
+Keep this shared selector contract in `SKILL.md`. Service mapping files provide only the telemetry stem and environment-neutral service behavior; never hard-code an environment value or repeat the common log selector in a service mapping.
+
 Group the first result by `k8s.workload.name` for logs or `service.name` for metrics and confirm that every returned value belongs to the requested environment and logical service. The selector may intentionally return both `use1` and `use2`; aggregate them in the same query when the user wants a cross-region total. If an unexpected workload or service name appears, switch to an explicit allowlist of the expected tagged names instead of silently including it.
 
 Do not substitute `dt.entity.service.name` for the metric selector without inspecting it. In validated services, `dt.entity.service.name` was null on logs and request-count metric rows, and the custom `env` field was null on request-count metrics. The paired log fields and tagged metric `service.name` were the reliable selectors.

@@ -2,6 +2,8 @@
 
 Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Use the telemetry stem with `log.source` plus `env` for logical log selection and as the suffix of tagged metric `service.name`; preserve the tags only when an exact workload, service name, or entity fallback is required.
 
+The logical selector templates live in [SKILL.md](SKILL.md). Keep every linked service note environment-neutral: it may document a telemetry stem alias or service-specific enrichment behavior, but it must not pin an environment or restate the shared log selector.
+
 | Logical service | Telemetry stem | Entity ID seed | Debugging notes |
 | --- | --- | --- | --- |
 | `sf-item` | `sf-item` | `SERVICE-E8F750E0328DD297` | [sf-item](services/sf-item.md) |

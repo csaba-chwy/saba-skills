@@ -1,6 +1,6 @@
 # `cart-b`
 
-Observed in production and staging `use1` telemetry on 2026-08-12; re-probe current enrichment before relying on it.
+Observed in live telemetry on 2026-08-12; re-probe current enrichment before relying on it.
 
 - Use the exact tagged `cart-b` name and workload. Rank any duplicate exact-name entities by request traffic before selecting one.
 - Request-count metrics expose `failed`, `endpoint.name`, HTTP method/status, workload, and version dimensions. Some metric rows represent non-HTTP or partially enriched operations, so group only by dimensions present in the catalog result.
