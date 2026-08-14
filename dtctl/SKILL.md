@@ -21,7 +21,7 @@ dtctl config describe-context "$DT_CONTEXT" --plain
 dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
-Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
+Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query and any failure-triggered verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
 Normalize the target into an environment tag, environment value, and telemetry stem before querying. For example, `[stg][use1]agentic-commerce-orchestrator` becomes `[stg]`, `stg`, and `agentic-commerce-orchestrator`. Read [mappings.md](mappings.md) for aliases such as `purchase-app` to `purchaseapp`.
 
@@ -61,7 +61,6 @@ dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-15m | filter starts
 Resolve an exact telemetry service name to its entity ID only when the logical selector is absent or ambiguous, or when a span query requires `dt.entity.service`. Use the mapped entity ID as a seed; if it has no data in the selected context, run exact-name discovery. If more than one record matches, disambiguate before continuing.
 
 ```bash
-dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
 dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
@@ -116,22 +115,32 @@ Every `fetch logs` or `fetch spans` query must:
 1. Use either a small metric-selected incident window or an explicit sampling ratio over a large user-requested analysis window.
 2. Filter on a selective target such as paired `log.source` plus `env`, an exact `dt.entity.service`, `trace_id`, `trace.id`, `k8s.namespace.name`, `k8s.workload.name`, or `host.name` before sorting or aggregation.
 3. Return only fields needed for the next step and end with `limit 20` (never over 100 without a reason).
-4. Use `--default-scan-limit-gbytes 5` and `-o json --plain` when executing.
+4. Use `-o json --plain`. Start the first raw telemetry query of every new investigation with `--default-scan-limit-gbytes 5`; use a higher cap only after following the escalation workflow below.
 
-A result limit does not limit Grail scan cost. A request-count metric can locate failures across a broad window without scanning raw telemetry. Before an **unsampled** raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 20 GB, explain the cost and get the user's approval first. Do not raise the scan cap without approval.
+A result limit does not limit Grail scan cost. A request-count metric can locate failures across a broad window without scanning raw telemetry.
+
+When a necessary query reaches its scan cap:
+
+1. Confirm that its target, timeframe, fields, sorting, and aggregation are still needed for the question. Use the failure metadata or partial result to judge whether the query was close to completing.
+2. Reduce avoidable scan cost first: strengthen selectors, reuse a metric-selected interval, remove unnecessary fields or operations, or increase sampling for large-range classification. Do not make the query cheaper in a way that prevents it from answering the user's question.
+3. If the query remains necessary, raise the cap by the smallest useful step. Prefer `5` to `10` to `20`, then 10 GB increments up to `50`; use a smaller intermediate value when the evidence supports it. Do not jump directly from 5 GB to 50 GB merely for convenience.
+4. Stop escalating as soon as the query succeeds or the likely value no longer justifies the added cost. Do not repeat an unchanged capped query without changing either its shape, sampling ratio, or cap.
+5. Reuse the lowest proven-sufficient cap only for closely related follow-up queries in the same investigation. Start a separate investigation back at 5 GB instead of treating a previous higher cap as a new default.
+
+Use judgment rather than treating 50 GB as a target or budget. Before an **unsampled** raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 50 GB, explain the cost and get the user's approval first. Never exceed 50 GB without explicit approval.
 
 ## Sample raw errors over large ranges
 
 When the user asks to analyze or rank errors over a large time range, do not answer from only the latest or busiest minute. Keep the requested timeframe and introduce sampling after the metric pass:
 
-1. Run the raw query over the full requested range with `--default-sampling-ratio 10`; use powers of ten and increase to `100`, `1000`, or higher if the 5 GB scan cap is reached.
+1. Run the raw query over the full requested range with `--default-sampling-ratio 10` and the 5 GB starting cap. Use powers of ten and increase the ratio to `100`, `1000`, or higher if that cap is reached; use the incremental scan-cap workflow only when stronger sampling would undermine the needed evidence.
 2. Include `--metadata=scannedBytes,sampled,analysisTimeframe` and confirm `sampled` is `true` and `analysisTimeframe` matches the requested range.
 3. Use the full-range sample to discover error schemas, recurring types, and candidate subgraph or dependency fields.
 4. Stratify follow-up evidence using the metric timeline: sample at least a peak-failure interval and a normal-baseline interval; for multi-day ranges also cover early and late portions or relevant deployment boundaries.
 5. Use exact metrics for totals and rates. Label counts or rankings computed from sampled raw records as approximate, state the sampling ratio, and do not extrapolate rare-error counts unless the sampling design supports it.
 6. After classifying error types, use selective exact fields such as endpoint, subgraph, error type, trace ID, or pod to retrieve small unsampled examples when needed.
 
-Sampling reduces scan cost while preserving coverage of the requested period. If a sampled query still reaches the cap, increase the sampling ratio before narrowing the timeframe. Narrow the timeframe only for incident drilldown, exact examples, or when sampling cannot answer the question.
+Sampling reduces scan cost while preserving coverage of the requested period. If a sampled query still reaches the cap, increase the sampling ratio before raising the cap or narrowing the timeframe. Raise the cap incrementally only when stronger sampling would make the needed evidence unreliable. Narrow the timeframe only for incident drilldown, exact examples, or when sampling cannot answer the question.
 
 ```bash
 # Sample error logs across a large requested range. Use the exact service entity when
@@ -145,13 +154,22 @@ dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-7d | filter dt.enti
 
 Sampling can miss rare events and can distort rankings when records have unequal inclusion behavior. Present sampled raw results as classification evidence, not exact population counts. If the metric catalog already exposes the desired grouping dimension, prefer its exact metric ranking over a sampled raw aggregation.
 
-Validate unfamiliar DQL before executing it:
+Execute DQL directly on the normal path. Do not run `dtctl verify query` as a routine preflight, even for unfamiliar DQL; it adds a redundant request when the query is already valid.
+
+Use verification only after `dtctl query` fails with an error that identifies the DQL as invalid, such as a syntax, type, function, field, or semantic validation error. Do not verify authorization failures, scan-limit failures, transport errors, missing data, or valid queries that return no records.
+
+When an invalid-query error occurs:
+
+1. Run `dtctl verify query` on the exact failed DQL in the same context.
+2. Read the complete verifier output and use its locations, suggestions, and diagnostic codes to identify the smallest correction. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` as validation failures even when the verifier also prints `Query is valid` and exits successfully.
+3. Execute the corrected query once with its original output, scan-limit, sampling, and metadata controls. Do not rerun the unchanged invalid query or verify the corrected query preemptively.
+
+For example, only run the second command after the first command reports invalid DQL:
 
 ```bash
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 dtctl --context "$DT_CONTEXT" verify query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --plain
 ```
-
-Read the full verifier output. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` diagnostics as validation failures even if the command also prints `Query is valid` and exits successfully.
 
 ## Correlate logs and traces
 
@@ -177,7 +195,6 @@ dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW
 dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Pivot from one exact log trace ID to its spans.
-dtctl --context "$DT_CONTEXT" verify query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --plain
 dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Find all logs carrying that exact trace ID, including other services when present.
