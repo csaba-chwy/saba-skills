@@ -115,22 +115,32 @@ Every `fetch logs` or `fetch spans` query must:
 1. Use either a small metric-selected incident window or an explicit sampling ratio over a large user-requested analysis window.
 2. Filter on a selective target such as paired `log.source` plus `env`, an exact `dt.entity.service`, `trace_id`, `trace.id`, `k8s.namespace.name`, `k8s.workload.name`, or `host.name` before sorting or aggregation.
 3. Return only fields needed for the next step and end with `limit 20` (never over 100 without a reason).
-4. Use `--default-scan-limit-gbytes 5` and `-o json --plain` when executing.
+4. Use `-o json --plain`. Start the first raw telemetry query of every new investigation with `--default-scan-limit-gbytes 5`; use a higher cap only after following the escalation workflow below.
 
-A result limit does not limit Grail scan cost. A request-count metric can locate failures across a broad window without scanning raw telemetry. Before an **unsampled** raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 20 GB, explain the cost and get the user's approval first. Do not raise the scan cap without approval.
+A result limit does not limit Grail scan cost. A request-count metric can locate failures across a broad window without scanning raw telemetry.
+
+When a necessary query reaches its scan cap:
+
+1. Confirm that its target, timeframe, fields, sorting, and aggregation are still needed for the question. Use the failure metadata or partial result to judge whether the query was close to completing.
+2. Reduce avoidable scan cost first: strengthen selectors, reuse a metric-selected interval, remove unnecessary fields or operations, or increase sampling for large-range classification. Do not make the query cheaper in a way that prevents it from answering the user's question.
+3. If the query remains necessary, raise the cap by the smallest useful step. Prefer `5` to `10` to `20`, then 10 GB increments up to `50`; use a smaller intermediate value when the evidence supports it. Do not jump directly from 5 GB to 50 GB merely for convenience.
+4. Stop escalating as soon as the query succeeds or the likely value no longer justifies the added cost. Do not repeat an unchanged capped query without changing either its shape, sampling ratio, or cap.
+5. Reuse the lowest proven-sufficient cap only for closely related follow-up queries in the same investigation. Start a separate investigation back at 5 GB instead of treating a previous higher cap as a new default.
+
+Use judgment rather than treating 50 GB as a target or budget. Before an **unsampled** raw `fetch logs` or `fetch spans` window over two hours, a weakly filtered fetch, a custom bucket, or a scan cap over 50 GB, explain the cost and get the user's approval first. Never exceed 50 GB without explicit approval.
 
 ## Sample raw errors over large ranges
 
 When the user asks to analyze or rank errors over a large time range, do not answer from only the latest or busiest minute. Keep the requested timeframe and introduce sampling after the metric pass:
 
-1. Run the raw query over the full requested range with `--default-sampling-ratio 10`; use powers of ten and increase to `100`, `1000`, or higher if the 5 GB scan cap is reached.
+1. Run the raw query over the full requested range with `--default-sampling-ratio 10` and the 5 GB starting cap. Use powers of ten and increase the ratio to `100`, `1000`, or higher if that cap is reached; use the incremental scan-cap workflow only when stronger sampling would undermine the needed evidence.
 2. Include `--metadata=scannedBytes,sampled,analysisTimeframe` and confirm `sampled` is `true` and `analysisTimeframe` matches the requested range.
 3. Use the full-range sample to discover error schemas, recurring types, and candidate subgraph or dependency fields.
 4. Stratify follow-up evidence using the metric timeline: sample at least a peak-failure interval and a normal-baseline interval; for multi-day ranges also cover early and late portions or relevant deployment boundaries.
 5. Use exact metrics for totals and rates. Label counts or rankings computed from sampled raw records as approximate, state the sampling ratio, and do not extrapolate rare-error counts unless the sampling design supports it.
 6. After classifying error types, use selective exact fields such as endpoint, subgraph, error type, trace ID, or pod to retrieve small unsampled examples when needed.
 
-Sampling reduces scan cost while preserving coverage of the requested period. If a sampled query still reaches the cap, increase the sampling ratio before narrowing the timeframe. Narrow the timeframe only for incident drilldown, exact examples, or when sampling cannot answer the question.
+Sampling reduces scan cost while preserving coverage of the requested period. If a sampled query still reaches the cap, increase the sampling ratio before raising the cap or narrowing the timeframe. Raise the cap incrementally only when stronger sampling would make the needed evidence unreliable. Narrow the timeframe only for incident drilldown, exact examples, or when sampling cannot answer the question.
 
 ```bash
 # Sample error logs across a large requested range. Use the exact service entity when
