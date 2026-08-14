@@ -21,7 +21,7 @@ dtctl config describe-context "$DT_CONTEXT" --plain
 dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
-Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query or verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
+Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query and any failure-triggered verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
 
 Normalize the target into an environment tag, environment value, and telemetry stem before querying. For example, `[stg][use1]agentic-commerce-orchestrator` becomes `[stg]`, `stg`, and `agentic-commerce-orchestrator`. Read [mappings.md](mappings.md) for aliases such as `purchase-app` to `purchaseapp`.
 
@@ -61,7 +61,6 @@ dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-15m | filter starts
 Resolve an exact telemetry service name to its entity ID only when the logical selector is absent or ambiguous, or when a span query requires `dt.entity.service`. Use the mapped entity ID as a seed; if it has no data in the selected context, run exact-name discovery. If more than one record matches, disambiguate before continuing.
 
 ```bash
-dtctl --context "$DT_CONTEXT" verify query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --plain
 dtctl --context "$DT_CONTEXT" query 'fetch dt.entity.service | filter entity.name == "SERVICE-NAME" | fields id, entity.name | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 ```
 
@@ -145,13 +144,22 @@ dtctl --context "$DT_CONTEXT" query 'fetch spans, from:now()-7d | filter dt.enti
 
 Sampling can miss rare events and can distort rankings when records have unequal inclusion behavior. Present sampled raw results as classification evidence, not exact population counts. If the metric catalog already exposes the desired grouping dimension, prefer its exact metric ranking over a sampled raw aggregation.
 
-Validate unfamiliar DQL before executing it:
+Execute DQL directly on the normal path. Do not run `dtctl verify query` as a routine preflight, even for unfamiliar DQL; it adds a redundant request when the query is already valid.
+
+Use verification only after `dtctl query` fails with an error that identifies the DQL as invalid, such as a syntax, type, function, field, or semantic validation error. Do not verify authorization failures, scan-limit failures, transport errors, missing data, or valid queries that return no records.
+
+When an invalid-query error occurs:
+
+1. Run `dtctl verify query` on the exact failed DQL in the same context.
+2. Read the complete verifier output and use its locations, suggestions, and diagnostic codes to identify the smallest correction. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` as validation failures even when the verifier also prints `Query is valid` and exits successfully.
+3. Execute the corrected query once with its original output, scan-limit, sampling, and metadata controls. Do not rerun the unchanged invalid query or verify the corrected query preemptively.
+
+For example, only run the second command after the first command reports invalid DQL:
 
 ```bash
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 dtctl --context "$DT_CONTEXT" verify query 'fetch logs, from:now()-15m | filter dt.entity.service == "SERVICE-xxx" | limit 20' --plain
 ```
-
-Read the full verifier output. Treat `SEVERE` or `QUERY_ALWAYS_EMPTY_FILTER` diagnostics as validation failures even if the command also prints `Query is valid` and exits successfully.
 
 ## Correlate logs and traces
 
@@ -177,7 +185,6 @@ dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW
 dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Pivot from one exact log trace ID to its spans.
-dtctl --context "$DT_CONTEXT" verify query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --plain
 dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --default-scan-limit-gbytes 5 -o json --plain
 
 # Find all logs carrying that exact trace ID, including other services when present.
