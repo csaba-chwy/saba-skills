@@ -14,7 +14,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | `one-shot-this/` | Implements an approved single-repository Jira change in the current session, or launches isolated Codex workers in tmux-backed Git worktrees for a multi-repository change. |
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
 | `generate-service-description/` | Generates or refreshes concise, evidence-based `service_description.md` files for repositories. |
-| `code-review/` | Reviews GitHub pull requests and publishes only user-approved, actionable inline comments. |
+| `code-review/` | Reviews GitHub pull requests in the reviewer's voice, validates runtime proof of testing, and publishes only user-approved comments. |
 
 `one-shot-this` composes the other capabilities: it reads the executable contract from Jira, uses service descriptions and the catalog to identify affected repositories, preserves requirements in implementation packets and GitHub pull requests, and routes Jenkins-backed checks through the pipeline checker. Single-repository plans stay in the current session; only multi-repository plans start workers.
 

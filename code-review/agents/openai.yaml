@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Review"
-  short_description: "Review PRs with approval before comments"
-  default_prompt: "Use $code-review to review this pull request, draft actionable comments, and wait for my approval before publishing them."
+  short_description: "Review PRs with runtime proof checks"
+  default_prompt: "Use $code-review to review this pull request in my voice, validate runtime proof of testing, draft actionable comments, and wait for approval before publishing."
