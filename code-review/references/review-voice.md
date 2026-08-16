@@ -38,7 +38,7 @@ Examples of the intended shape:
 
 ## Avoid
 
-- Do not publish severity prefixes, finding titles, or a canned review template.
+- Do not assign or display severity ratings, priority codes, finding titles, or a canned review template.
 - Do not sound like a static analyzer: avoid `This change introduces ...` when a direct request is clearer.
 - Do not repeat the diff without explaining impact.
 - Do not use generic `consider adding tests`; name the required E2E scenario or acceptable runtime evidence.

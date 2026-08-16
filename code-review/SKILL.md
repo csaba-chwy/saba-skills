@@ -84,26 +84,17 @@ If proof is `missing`, `invalid`, or `unverified`, draft one concise top-level r
 
 Read [review voice](references/review-voice.md) before drafting. Apply its stable tone and structure without copying repository-specific wording from prior comments. Favor direct, conversational requests backed by concrete evidence and a specific correction.
 
-Keep severity and finding titles as private drafting metadata. Do not put `P0`–`P3`, formal finding headings, or a generic review rubric into the GitHub comment unless the user explicitly requests that format.
+Do not assign severity ratings or priority codes to findings. Do not add formal finding headings or a generic review rubric to the draft or published GitHub comments.
 
 ## 6. Draft the review
 
 Create one concise comment per independently actionable issue. Anchor code findings to a changed line whenever GitHub permits it. Use a top-level review body only for cross-cutting findings such as missing proof of testing. Each draft must contain:
 
-- severity: `P0`, `P1`, `P2`, or `P3` as private metadata;
 - file path and target line or range, or `top-level review`;
-- a short finding title as private metadata;
 - the exact comment body to publish;
 - concise evidence explaining why the finding is valid, kept outside the publishable body when it would make the PR comment noisy.
 
 Write the publishable body so it explains the concrete impact, the triggering condition, and a practical direction for correction. Use a GitHub suggestion block only when the exact replacement is small, certain, and preserves intended behavior.
-
-Rank severity as follows:
-
-- `P0`: blocks release or causes widespread catastrophic behavior;
-- `P1`: likely correctness, security, or data-loss defect requiring prompt correction;
-- `P2`: material defect or maintainability problem that should be fixed before merge;
-- `P3`: worthwhile localized improvement with limited impact.
 
 Always report the proof-of-testing classification in the draft summary. If no actionable code findings survive verification and proof is validated or not applicable, say so and do not invent comments.
 
