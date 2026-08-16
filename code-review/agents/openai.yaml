@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review PRs with approval before comments"
+  default_prompt: "Use $code-review to review this pull request, draft actionable comments, and wait for my approval before publishing them."
