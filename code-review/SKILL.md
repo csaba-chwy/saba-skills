@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Review an input GitHub pull request in the reviewer's established voice, inspect repository context and the diff for correctness, duplicated code, material best-practice violations, service-contract mismatches, and missing proof of testing, then draft actionable comments for user feedback and publish only the explicitly approved comments. Use when Codex is asked to review a PR, prepare or post code-review comments, validate E2E, screenshot, Jenkins, or Dynatrace testing evidence, inspect a pull-request diff, or perform an approval-gated GitHub review."
+description: "Review an input GitHub pull request in the reviewer's established voice, inspect repository context and the diff for correctness, duplicated code, material best-practice violations, service-contract mismatches, and missing proof of testing, then draft actionable comments for user feedback and publish only the explicitly approved comments. Use when Codex is asked to review a PR, prepare or post code-review comments, validate supplied E2E, screenshot, or nonprod Dynatrace testing evidence, diagnose a failing Jenkins-backed GitHub check during review, inspect a pull-request diff, or perform an approval-gated GitHub review."
 ---
 
 # Code Review
@@ -55,20 +55,27 @@ Classify proof as `validated`, `missing`, `invalid`, or `unverified`:
 - `invalid`: supplied evidence does not exercise the changed behavior, comes from the wrong environment or revision, is stale, or shows a failure;
 - `unverified`: a potentially valid artifact exists but cannot be accessed or tied to the reviewed head commit.
 
-### Validate Jenkins E2E evidence
+Keep proof validation limited to evidence the PR already supplies:
 
-- Load and follow `../jenkins-pipeline-checker/SKILL.md` whenever a Jenkins run is offered as proof or a GitHub check points to Jenkins.
-- Confirm the run belongs to the PR branch and reviewed head commit. Inspect the Pipeline REST `wfapi` stage result and relevant stage log, falling back to `consoleText` when the stage log is empty.
-- Verify the exact deploy and E2E stages needed by the change ran, were not skipped, and passed. Read the logs far enough to identify the executed scenario and its result.
-- Do not accept the overall Jenkins result alone. A pipeline can be green while a relevant deployment or observability step failed or suppressed its error.
-- If credentials, SSO, missing logs, or commit mismatch prevent validation, classify the evidence as `unverified`; do not assume it passed.
+- Do not search Jenkins or Dynatrace to discover, reconstruct, or infer proof that the author did not provide.
+- If proof is `missing`, stop proof validation and draft the testing request. Do not invoke the Jenkins or Dynatrace skills.
+- Use the Jenkins and Dynatrace skills only under the narrow triggers below. Do not perform general pipeline, service-health, traffic, error, log, or trace analysis during a routine review.
+
+### Diagnose a failing Jenkins check
+
+- Check the GitHub check status first. Load and follow `../jenkins-pipeline-checker/SKILL.md` only when the Jenkins-backed GitHub check is failing.
+- Do not open Jenkins or analyze its stages or logs when the GitHub check is passing, pending, skipped, or absent. A passing Jenkins check is not proof by itself; validate only an accepted E2E artifact the author linked or attached separately.
+- For a failing check, confirm the run belongs to the PR branch and reviewed head commit. Inspect the Pipeline REST `wfapi` stage result and the failing stage log, falling back to `consoleText` when the stage log is empty.
+- Read only enough surrounding output to identify the failure and whether it invalidates submitted proof of testing or reveals an actionable PR issue. Do not audit unrelated successful stages.
+- If credentials, SSO, missing logs, or commit mismatch prevent inspection of a failing check, report the limitation without assuming the result or searching for replacement proof.
 
 ### Validate Dynatrace trace or log evidence
 
-- Load and follow `../dtctl/SKILL.md` whenever the PR supplies a Dynatrace trace or log link, ID, or time window as proof.
-- Derive the `prod` or `nonprod` context from the explicit environment tag. Never guess an environment or cross the production boundary.
-- Prefer the exact trace or request ID and narrow time window supplied by the evidence. Otherwise locate traffic cheaply with service metrics before running a bounded log or span query.
-- Confirm the telemetry belongs to the expected service, environment, deployment window, and changed path. Verify the expected outcome and inspect related failures rather than treating record existence as success.
+- Load and follow `../dtctl/SKILL.md` only when the PR supplies a Dynatrace trace or log link, exact ID, or bounded time window as proof.
+- Always use the explicit `nonprod` context for feature-branch proof. Never query `prod` during PR proof validation. Treat production-only evidence or evidence from the wrong nonprod environment as `invalid`.
+- Validate the supplied artifact directly with its exact trace or request ID and narrow time window. If the artifact lacks enough targeting information for a bounded lookup, classify it as `unverified`; do not discover traffic with service metrics or broad searches.
+- Confirm the telemetry belongs to the expected service, nonprod environment, feature-branch deployment window, reviewed revision when visible, and changed path. Verify the expected outcome rather than treating record existence as success.
+- Do not expand into general service-health, traffic, error, log, or trace analysis. Inspect narrowly related failures only when the supplied artifact itself shows a failure or inconsistency that must be resolved to classify the proof.
 - Treat `NOT_AUTHORIZED_FOR_TABLE` as a trace permission boundary. Use log-side correlation only when it still proves the claim, and label the limitation.
 - Keep sensitive telemetry values out of drafted comments. Cite the existing Dynatrace link and summarize only the evidence needed to explain validation or the gap.
 
