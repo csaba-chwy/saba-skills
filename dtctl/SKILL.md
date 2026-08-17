@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Investigate Dynatrace services with dtctl by selecting the correct nonprod or prod context, locating traffic and failures cheaply through metric dimensions, and then running safe, bounded or sampled log and trace queries. Use for error analysis over short or long time ranges, log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
+description: Investigate Dynatrace services with dtctl by selecting the correct nonprod or prod context, locating traffic and failures cheaply through metric dimensions, and then running safe, bounded or sampled log and trace queries with directly linked Dynatrace evidence. Use for error analysis over short or long time ranges, log errors, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations.
 ---
 
 # Dynatrace investigation with dtctl
@@ -22,6 +22,58 @@ dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
 Pass `--context "$DT_CONTEXT"` on every subsequent `dtctl` query and any failure-triggered verification; do not rely on the current default context. Require preconfigured read-only `nonprod` and `prod` contexts. If either context is unavailable or the user asks to refresh credentials, direct them to [README.md](README.md) instead of embedding workstation setup in the investigation workflow. Do not use `dtctl auth whoami`; it requires an OAuth/JWT identity scope that a platform token may not have.
+
+## Require proof and direct Dynatrace links
+
+An investigation is complete only when its material conclusions are backed by both observed `dtctl` results and direct Dynatrace links that another authenticated user can open. A trace ID, timestamp, entity ID, pod name, copied DQL statement, or tenant home page is useful context but is not a substitute for a direct evidence link.
+
+For every material claim, retain a proof bundle containing:
+
+1. The exact context and DQL that produced the evidence.
+2. The concrete returned values supporting the claim, such as the failure count, timeframe, trace ID, status code, workload, dependency, or error type.
+3. A direct link to the corresponding Dynatrace view with the relevant tenant, absolute timeframe, and selectors preserved.
+
+Use the environment URL printed by `dtctl config describe-context "$DT_CONTEXT" --plain` as the only tenant source. Never guess a tenant hostname, reuse a link from the other context, or fall back across the production boundary while creating evidence links.
+
+### Create and validate evidence links
+
+After the bounded CLI investigation identifies the smallest useful evidence, open that same context's environment URL in an authenticated Dynatrace browser session and reproduce the evidence in the most specific read-only view:
+
+- Metrics: open the exact metric expression and dimensions in Data Explorer or another Dynatrace metric view, set the investigation's absolute timeframe, and use **Share link** with the current timeframe included.
+- Traces: open the exact trace or the narrow trace selection in Distributed Tracing. Prefer the single-trace view for a known `trace.id`; otherwise preserve the selective filter and absolute timeframe. Copy the app's share link or the stable current URL.
+- Logs: open Logs with the same selective service, workload, pod, trace, severity, and error filters used for the conclusion and the same absolute timeframe. Use the app's share or copy-link action.
+
+Use Dynatrace's app-generated Share or Copy link instead of hand-constructing undocumented application routes. A plausible-looking URL is not proof that the target app accepted its query state. Reopen every copied link in a separate tab and verify all of the following before citing it:
+
+- The hostname matches the environment URL for `DT_CONTEXT`.
+- The intended app and telemetry type opened.
+- The absolute start and end timestamps match the investigated interval; a historical evidence link must not shift with `now()`.
+- The trace ID or selective metric/log filters are still applied.
+- The view identifies the same records or aggregate used in the conclusion.
+
+Do not place secrets, captured headers, customer data, full log content, or other sensitive values in a URL. URL query parameters can persist in browser history and shared systems. Prefer technical identifiers and selective telemetry fields; if sensitive data is the only possible selector, omit it from the URL and explain the resulting evidence limitation.
+
+If an authenticated Dynatrace UI is unavailable, the relevant app cannot produce a stable link, or the copied link fails validation, report the blocker and label the CLI findings as **unlinked interim evidence**. Do not present the investigation as a complete, externally verifiable root-cause report. If trace access is denied, provide linked log or metric evidence for the claims those sources support and state that trace evidence could not be verified; never imply that an unavailable trace link exists.
+
+### Cite evidence in the answer
+
+Place descriptive Markdown links next to the claims they support, then include a compact evidence table that records what the query actually returned. Do not provide bare URLs or generic labels such as `Dynatrace`.
+
+```markdown
+The failed request was isolated to use1 [failure metric and regional comparison](DIRECT-METRIC-LINK).
+Checkout-B returned HTTP 500 on the failed trace [failed distributed trace](DIRECT-TRACE-LINK),
+and its pod recorded connection refusals to Cart-B [supporting Checkout-B logs](DIRECT-LOG-LINK).
+
+Evidence:
+
+| Source | Observed proof | Dynatrace |
+|---|---|---|
+| Metrics | One failed GET in use1 and zero in use2, 03:19–03:20 UTC | [Failure minute and regional comparison](DIRECT-METRIC-LINK) |
+| Trace | Trace `TRACE-ID`, HTTP 500, 333 ms | [Exact failed request](DIRECT-TRACE-LINK) |
+| Logs | Checkout-B pod reported `Connection refused` to Cart-B at 03:19:50 UTC | [Downstream connection refusals](DIRECT-LOG-LINK) |
+```
+
+The links make the analysis reproducible, not immutable. Telemetry can age out and access controls still apply, so retain the supporting values in the written answer and never use a link alone as evidence that a query returned data.
 
 Normalize the target into an environment tag, environment value, and telemetry stem before querying. For example, `[stg][use1]agentic-commerce-orchestrator` becomes `[stg]`, `stg`, and `agentic-commerce-orchestrator`. Read [mappings.md](mappings.md) for aliases such as `purchase-app` to `purchaseapp`.
 
