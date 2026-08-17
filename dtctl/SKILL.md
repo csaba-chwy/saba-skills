@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Investigate Dynatrace services with dtctl using the correct nonprod or prod context, metric-first failure discovery, safe bounded log and trace queries, early direct trace links, and parallel evidence collection. Use for error analysis, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations over short or long time ranges.
+description: Investigate Dynatrace services with dtctl using the correct nonprod or prod context, metric-first failure discovery, safe bounded log and trace queries, early trace-query links, and parallel evidence collection. Use for error analysis, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, service latency, and service-specific observability investigations over short or long time ranges.
 ---
 
 # Dynatrace investigation with dtctl
@@ -14,7 +14,7 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
 - Back every material conclusion with observed values, the exact context and DQL, and a direct Dynatrace link.
-- Do not use Chrome or another browser on the normal path. Generate links with `dtctl open intent`.
+- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw DQL query in Logs & Events; never route evidence through notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
 - Keep secrets, customer data, full log content, and sensitive captured headers out of URLs and summaries.
 
 ## Start safely
@@ -38,24 +38,25 @@ Do not use `dtctl auth whoami`; a platform token may lack its identity scope. If
 1. Resolve the target, context, absolute requested timeframe, and timezone interpretation once.
 2. Use `dt.service.request.count` to locate traffic, failures, regions, and the smallest useful incident window. Run independent metric timeline and catalog queries concurrently.
 3. Query the root span or other most selective source needed to identify a representative failed trace.
-4. **Immediately publish the trace link** using the rule below.
+4. **Immediately publish the trace-query link** using the rule below.
 5. Run trace topology, log correlation, and comparator/downstream-health work in parallel when those branches are independent.
 6. Synthesize only returned evidence, distinguish exact native correlation from pod/time support, and include linked proof beside every material claim.
 
 Read [references/query-strategy.md](references/query-strategy.md) before constructing service, region, metric, or entity selectors.
 
-## Publish a trace link immediately
+## Publish a trace-query link immediately
 
-As soon as any query returns a valid 32-character hexadecimal `trace.id` that supports the incident, generate its exact trace intent URL and send it to the user in commentary. Do not wait for log correlation, root-cause synthesis, comparison work, other evidence links, or the final answer.
+As soon as any query returns a valid 32-character hexadecimal `trace.id` that supports the incident, create a selective, bounded `fetch spans` DQL query for that trace and publish it through the Logs & Events DQL view described in [references/evidence-links.md](references/evidence-links.md). Send the link to the user in commentary without waiting for log correlation, root-cause synthesis, comparison work, other evidence links, or the final answer.
 
-```bash
-dtctl --context "$DT_CONTEXT" open intent \
-  dynatrace.distributedtracing/view-trace \
-  --data trace_id="TRACE-ID" \
-  --plain
+```dql
+fetch spans, from:"WINDOW-START", to:"WINDOW-END"
+| filter trace.id == toUid("TRACE-ID")
+| fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service
+| sort start_time asc
+| limit 20
 ```
 
-Confirm that the hostname matches the selected context and that the decoded payload preserves the trace ID. Use a descriptive Markdown link such as `[Open the failed trace in Dynatrace](URL)`, state the observed status/duration already returned, and say that investigation is continuing. Keep the same link in the final evidence table.
+Confirm that the hostname matches the selected context and that the decoded Logs & Events payload preserves the exact DQL, absolute timeframe, and trace ID. Use a descriptive Markdown link such as `[Query the failed trace in Dynatrace](URL)`, state the observed status/duration already returned, and say that investigation is continuing. Keep the same link in the final evidence table.
 
 If link generation fails, report the exact trace ID as **unlinked interim evidence** and continue; do not imply that a working link exists.
 
@@ -71,7 +72,7 @@ After the incident window or trace ID is known, assign up to three non-overlappi
 
 Give every worker the fixed context, verified tenant, absolute window, target selector, trace ID when known, required Keychain execution mode, and its exclusive question. Workers must not repeat context/auth checks or mapping discovery, read unrelated references, change context, duplicate another lane, mutate Dynatrace, or exceed the coordinator's limits. Give each lane a maximum of three telemetry queries and a two-minute target; require coordinator approval to exceed either. As soon as its question is answered, the worker returns the claim, exact DQL, observed values, direct link when needed, correlation strength, scan metadata, and caveats, then stops. Merge only evidence that satisfies this contract.
 
-If a worker discovers the first incident trace ID, it must notify the coordinator immediately with the ID and observed proof. The coordinator generates and publishes the trace link before waiting for any worker to finish. Stop waiting for a lane once sufficient evidence answers the user's question; interrupt an over-running or redundant worker instead of making it the critical path. Read [references/parallel-investigation.md](references/parallel-investigation.md) whenever two or more branches can run independently.
+If a worker discovers the first incident trace ID, it must notify the coordinator immediately with the ID and observed proof. The coordinator generates and publishes the Logs & Events trace-query link before waiting for any worker to finish. Stop waiting for a lane once sufficient evidence answers the user's question; interrupt an over-running or redundant worker instead of making it the critical path. Read [references/parallel-investigation.md](references/parallel-investigation.md) whenever two or more branches can run independently.
 
 ## Raw telemetry guardrails
 
@@ -95,7 +96,7 @@ Retain a proof bundle for every material claim:
 - direct tenant-correct Dynatrace link;
 - correlation strength and any permission, retention, sampling, or scan caveat.
 
-Generate query evidence links as soon as their supporting query succeeds instead of batching them at the end. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
+Generate Logs & Events DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
 
 Place descriptive links beside supported claims and include a compact final evidence table. Read [references/evidence-links.md](references/evidence-links.md) when generating log, metric, or selective-query links and before writing the final answer.
 
