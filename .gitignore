@@ -1,6 +1,10 @@
 # Local environment variables
 .env
 
+# Local editor and OS artifacts
+.DS_Store
+.idea/
+
 # Generated Node.js artifacts
 **/node_modules/
 **/dist/

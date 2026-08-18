@@ -58,7 +58,7 @@ Classify proof as `validated`, `missing`, `invalid`, or `unverified`:
 Keep proof validation limited to evidence the PR already supplies:
 
 - Do not search Jenkins or Dynatrace to discover, reconstruct, or infer proof that the author did not provide.
-- If proof is `missing`, stop proof validation and draft the testing request. Do not invoke the Jenkins or Dynatrace skills.
+- If proof is `missing`, stop proof validation, record the gap in the session output, and continue the code review without drafting a GitHub comment. Do not invoke the Jenkins or Dynatrace skills.
 - Use the Jenkins and Dynatrace skills only under the narrow triggers below. Do not perform general pipeline, service-health, traffic, error, log, or trace analysis during a routine review.
 
 ### Diagnose a failing Jenkins check
@@ -85,7 +85,7 @@ Keep proof validation limited to evidence the PR already supplies:
 - Confirm it shows the changed behavior and expected result, not only source code, unit-test output, configuration, or an unrelated dashboard.
 - Use visible environment, URL, timestamp, request, or result context to connect it to the PR. Classify an ambiguous or inaccessible attachment as `unverified`.
 
-If proof is `missing`, `invalid`, or `unverified`, draft one concise top-level review comment that says what is absent or failed validation and asks for one accepted artifact relevant to this change. Do not scatter the same testing request across inline comments.
+If proof is `invalid` or `unverified`, draft one concise top-level review comment that says what failed validation and asks for one accepted artifact relevant to this change. Do not scatter the same testing request across inline comments. If proof is `missing`, report that classification only in the session output; do not include a testing request in the draft or published GitHub review.
 
 ## 5. Match the reviewer's voice
 
@@ -95,7 +95,7 @@ Do not assign severity ratings or priority codes to findings. Do not add formal 
 
 ## 6. Draft the review
 
-Create one concise comment per independently actionable issue. Anchor code findings to a changed line whenever GitHub permits it. Use a top-level review body only for cross-cutting findings such as missing proof of testing. Each draft must contain:
+Create one concise comment per independently actionable issue. Anchor code findings to a changed line whenever GitHub permits it. Use a top-level review body only for cross-cutting findings such as invalid or unverified supplied testing evidence. Each draft must contain:
 
 - file path and target line or range, or `top-level review`;
 - the exact comment body to publish;
@@ -103,7 +103,7 @@ Create one concise comment per independently actionable issue. Anchor code findi
 
 Write the publishable body so it explains the concrete impact, the triggering condition, and a practical direction for correction. Use a GitHub suggestion block only when the exact replacement is small, certain, and preserves intended behavior.
 
-Always report the proof-of-testing classification in the draft summary. If no actionable code findings survive verification and proof is validated or not applicable, say so and do not invent comments.
+Always report the proof-of-testing classification in the draft summary. Missing proof is session-only context and does not count as an actionable review finding. If no actionable code findings survive verification, say so and do not invent comments regardless of whether proof is validated, missing, or not applicable.
 
 ## 7. Run the approval and feedback loop
 
