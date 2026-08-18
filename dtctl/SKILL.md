@@ -33,6 +33,16 @@ dtctl --context "$DT_CONTEXT" auth status --plain
 
 Do not use `dtctl auth whoami`; a platform token may lack its identity scope. If a keychain-backed credential is unavailable only inside the sandbox, retry the same read-only command once with normal keychain access rather than changing tools or authentication. Once that retry proves the context uses macOS Keychain credentials, run every later `dtctl` command in this investigation with normal Keychain access on its first attempt. Do not incur a sandbox failure and approval wait for every query.
 
+## Apply the shared service baseline
+
+Treat each file under `services/` as a small set of service-specific overrides to this baseline, not a complete investigation recipe:
+
+- Re-probe current telemetry before relying on a dated enrichment observation. Use the logical selectors first. Resolve an exact tagged service or workload only when a logical selector is absent or ambiguous, and rank duplicate entities by current request traffic.
+- Inspect the dimensions actually returned by `dt.service.request.count`. Common dimensions include `failed`, `endpoint.name`, HTTP method and status, workload, and version, but partially enriched operations can omit some of them.
+- Probe log service, entity, trace, and span fields before choosing a correlation mode. A native trace ID is 32 hexadecimal characters and a native span ID is 16 hexadecimal characters; shorter values are application-local keys. Use exact native IDs only when the sampled values validate them, otherwise use exact workload, pod, and a tight time window as supporting evidence.
+- Expect spans to expose pod and workload identity plus server, client, or internal activity. Root spans can expose routes and X-Request-ID, but neither is guaranteed; treat captured request headers as sensitive.
+- When a service note names a Grail log bucket, add `bucket:"BUCKET-NAME"` to every `fetch logs` query for that service. Keep the paired `log.source` and `env` filter as the logical selector even when the bucket narrows the scan.
+
 ## Investigation workflow
 
 1. Resolve the target, context, absolute requested timeframe, and timezone interpretation once.
