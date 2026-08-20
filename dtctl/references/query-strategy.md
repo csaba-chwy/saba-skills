@@ -55,7 +55,7 @@ For a broad traffic or performance review, keep the graph timeline readable and 
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true | fields timeframe, interval, service.name, requests | sort service.name asc' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-Generate this successful timeline with `scripts/build_logs_events_graph_link.py`. Use a companion `scalar:true` query for totals, endpoint rankings, status mix, and prose arithmetic. For performance prompts, graph latency percentiles over time; for error-rate prompts, graph request and failed-request series or a derived rate. Use separate graphs when their scales make a combined chart difficult to read.
+Generate this successful timeline with `scripts/src/build_logs_events_graph_link.py`. Use a companion `scalar:true` query for totals, endpoint rankings, status mix, and prose arithmetic. For performance prompts, graph latency percentiles over time; for error-rate prompts, graph request and failed-request series or a derived rate. Use separate graphs when their scales make a combined chart difficult to read.
 
 For incident discovery, run the selective failure timeline and metric-catalog discovery concurrently after context/auth succeeds:
 

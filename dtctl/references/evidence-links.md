@@ -25,7 +25,7 @@ For table evidence:
 ```bash
 # DT_ENV_URL is the exact environment URL returned by describe-context.
 # DQL_FILE is a private temporary text file containing formatted DQL.
-python3 scripts/build_logs_events_link.py \
+python3 scripts/src/build_logs_events_link.py \
   --environment-url "$DT_ENV_URL" \
   --dql-file "$DQL_FILE"
 ```
@@ -33,7 +33,7 @@ python3 scripts/build_logs_events_link.py \
 For a metric graph:
 
 ```bash
-python3 scripts/build_logs_events_graph_link.py \
+python3 scripts/src/build_logs_events_graph_link.py \
   --environment-url "$DT_ENV_URL" \
   --dql-file "$DQL_FILE"
 ```

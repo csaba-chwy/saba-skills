@@ -1,6 +1,10 @@
 import base64
+import sys
 import unittest
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from build_logs_events_graph_link import build_graph_link
 
