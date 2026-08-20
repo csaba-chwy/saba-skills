@@ -51,7 +51,7 @@ def build_rundown_query(
     additional_filters: tuple[str, ...] = (),
     latency_percentile: int = 95,
 ) -> str:
-    """Return one plot-ready DQL query for traffic, errors, and latency."""
+    """Return one link-ready DQL query for traffic, errors, and latency."""
     if environment not in ENVIRONMENTS:
         raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
     if not SERVICE_RE.fullmatch(service):
@@ -101,7 +101,7 @@ def build_rundown_query(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build plot-ready service rundown DQL for request count, error rate, "
+            "Build link-ready service rundown DQL for request count, error rate, "
             "and latency percentile over time."
         )
     )

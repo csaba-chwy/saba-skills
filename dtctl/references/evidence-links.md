@@ -8,13 +8,14 @@ An investigation is complete only when material conclusions have both observed `
 
 Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical classic Logs and Events Advanced-mode route documented below; never guess a hostname, reuse another context's link, or cross the production boundary. Select a time-series bar chart with time on the x-axis for metric graphs and a table for discrete records or categorical scalar summaries.
 
-## Choose a human-readable visualization
+## Choose a human-readable Dynatrace evidence view
 
 - Use a **time-series bar chart** for metric prompts about traffic, request volume, performance, latency, or failures over a bounded range. Preserve the native `timeframe`, `interval`, and numeric arrays so time is always the x-axis. Logs and Events Classic does not support a line-chart visualization for these links; an unsupported `visualizationType=lineChart` silently falls back to a table.
 - Use a **table** for one RID, request ID, or trace ID; bounded logs or spans; exact record inspection; scalar rankings; and categorical totals.
 - Give broad reviews a small number of readable series. Prefer region, a few important endpoints, status class, or latency percentiles over dozens of endpoint/status combinations.
+- Put measures with different units or materially different scales in separate graph links. A service rundown should link request count, error rate, and latency separately rather than combine them on one unreadable axis.
 - Never use `scalar:true`, `summarize`, or array-reduction functions to prepare graph DQL. They remove the time dimension and produce a categorical result that belongs in prose or a table link.
-- Never make users decode JSON arrays. Calculate totals, rates, and percentile summaries from the returned arrays for prose, then link the unchanged time-series query as supporting evidence.
+- Never make users decode JSON arrays or redraw them locally. Calculate totals, rates, and percentile summaries from the returned arrays for prose, then provide the corresponding Dynatrace time-series links as supporting evidence.
 
 ## Generate links without a browser
 
@@ -86,6 +87,8 @@ Create DQL files in private temporary storage outside the user's repository and 
 - Retain observed query values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
 
 Do not invoke a browser on the normal path. Open a link only when the user explicitly requests UI validation or reports that it is broken.
+
+Do not invoke client-side visualization or image-generation capabilities, create HTML or image assets, render telemetry, or inspect screenshots. Validate evidence links by decoding their URL state and comparing the exact DQL instead.
 
 Do not place secrets, captured headers, customer data, full log content, or sensitive selectors in a URL. Prefer technical identifiers and selective telemetry fields. If the only selector is sensitive, omit it and explain the evidence limitation.
 

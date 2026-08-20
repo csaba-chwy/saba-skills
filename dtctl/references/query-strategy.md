@@ -49,7 +49,7 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
 
-For a basic service rundown, build one plot-ready query instead of assembling three independent results:
+For a basic service rundown, build one aligned, link-ready query instead of assembling three independent results:
 
 ```bash
 python3 scripts/src/build_service_rundown_query.py \
@@ -60,7 +60,11 @@ python3 scripts/src/build_service_rundown_query.py \
   --interval 15m
 ```
 
-Run its output with `dtctl query` and render the aligned arrays as separate request-count, error-rate, and p95-latency panels. The builder converts the response-time metric from its native microseconds to milliseconds. Keep the default aggregated across the logical service. For a more specific follow-up, repeat `--group-by` for confirmed low-cardinality fields or repeat `--additional-filter` with a single pipeline-free DQL expression:
+Run its output with `dtctl query` and summarize the aligned request-count, error-rate, and p95-latency arrays in prose. The builder converts the response-time metric from its native microseconds to milliseconds. Do not create or inspect a local chart, image, or HTML visualization.
+
+Create three Dynatrace graph-link DQL variants from the successful query by preserving the full `timeseries` and `fieldsAdd` stages while projecting only one measure in the final `fields` stage: `requests`, `error_rate`, or `latency_p95_ms`. Pass each variant to `scripts/src/build_logs_events_graph_link.py`. This keeps one unit and scale per graph, preserves the native arrays and explicit interval, and renders time on the x-axis without rerunning the telemetry query solely for link generation.
+
+Keep the default aggregated across the logical service. For a more specific follow-up, repeat `--group-by` for confirmed low-cardinality fields or repeat `--additional-filter` with a single pipeline-free DQL expression:
 
 ```bash
 python3 scripts/src/build_service_rundown_query.py \
@@ -73,7 +77,7 @@ python3 scripts/src/build_service_rundown_query.py \
   --additional-filter 'contains(service.name, "[use1]")'
 ```
 
-Use only dimensions already confirmed for the metrics. Keep secrets and customer identifiers out of additional filters and output links.
+Use only dimensions already confirmed for the metrics. Preserve those dimensions in each graph projection. Keep secrets and customer identifiers out of additional filters and output links.
 
 For a broad traffic or performance review, preserve metric arrays so Logs and Events Classic can render a time-series bar chart with time on the x-axis. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt, and select an explicit interval appropriate to the requested window:
 
