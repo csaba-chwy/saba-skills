@@ -16,7 +16,9 @@ from typing import Callable, Mapping, Sequence
 from build_logs_events_link import build_link, normalize_environment_url
 from build_service_rundown_query import (
     ENVIRONMENTS,
+    RUNDOWN_METRICS,
     build_scalar_rundown_query,
+    normalize_metrics,
 )
 
 
@@ -42,10 +44,12 @@ class Rundown:
     start: str
     end: str
     lookback: str
-    requests: int
-    failed_requests: int
-    error_rate: float
-    latency_p95_ms: float
+    metrics: tuple[str, ...]
+    latency_percentile: int
+    requests: int | None
+    failed_requests: int | None
+    error_rate: float | None
+    latency_ms: float | None
     link: str
 
 
@@ -175,6 +179,15 @@ def _number(record: Mapping[str, object], name: str) -> float:
     return float(value)
 
 
+def _selected_number(
+    record: Mapping[str, object],
+    name: str,
+    *,
+    selected: bool,
+) -> float | None:
+    return _number(record, name) if selected else None
+
+
 def execute_rundown(
     *,
     environment: str,
@@ -184,7 +197,12 @@ def execute_rundown(
     environ: Mapping[str, str] | None = None,
     runner: CommandRunner = _run,
     now: datetime | None = None,
+    metrics: tuple[str, ...] = (),
+    latency_percentile: int = 95,
 ) -> Rundown:
+    selected_metrics = normalize_metrics(metrics)
+    if not 1 <= latency_percentile <= 99:
+        raise ValueError("latency percentile must be between 1 and 99")
     start, end = resolve_window(lookback, end_time=end_time, now=now)
     context, environment_url = verify_context(
         environment,
@@ -196,6 +214,8 @@ def execute_rundown(
         service=service,
         start=start,
         end=end,
+        metrics=selected_metrics,
+        latency_percentile=latency_percentile,
     )
     result = runner(
         [
@@ -229,28 +249,52 @@ def execute_rundown(
         start=start,
         end=end,
         lookback=lookback,
-        requests=round(_number(record, "requests")),
-        failed_requests=round(_number(record, "failed_requests")),
-        error_rate=_number(record, "error_rate"),
-        latency_p95_ms=_number(record, "latency_p95_ms"),
+        metrics=selected_metrics,
+        latency_percentile=latency_percentile,
+        requests=(
+            round(_number(record, "requests"))
+            if "requests" in selected_metrics
+            else None
+        ),
+        failed_requests=(
+            round(_number(record, "failed_requests"))
+            if "failures" in selected_metrics
+            else None
+        ),
+        error_rate=_selected_number(
+            record, "error_rate", selected="error-rate" in selected_metrics
+        ),
+        latency_ms=_selected_number(
+            record,
+            f"latency_p{latency_percentile}_ms",
+            selected="latency" in selected_metrics,
+        ),
         link=build_link(environment_url, dql),
     )
 
 
 def render_markdown(result: Rundown) -> str:
-    return "\n".join(
-        (
-            f"### `[{result.environment}]{result.service}` — last {result.lookback}",
-            f"`{result.context}` · `{result.start}` to `{result.end}`",
-            "",
-            f"- Requests: **{result.requests:,}**",
-            f"- Failed requests: **{result.failed_requests:,}**",
-            f"- Error rate: **{result.error_rate:.4f}%**",
-            f"- p95 latency: **{result.latency_p95_ms:.2f} ms**",
-            "",
-            f"[Open the exact query in Dynatrace]({result.link})",
-        )
-    )
+    lines = [
+        f"### `[{result.environment}]{result.service}` — last {result.lookback}",
+        f"`{result.context}` · `{result.start}` to `{result.end}`",
+        "",
+    ]
+    for metric in result.metrics:
+        if metric == "requests" and result.requests is not None:
+            lines.append(f"- Requests: **{result.requests:,}**")
+        elif metric == "failures" and result.failed_requests is not None:
+            lines.append(f"- Failed requests: **{result.failed_requests:,}**")
+        elif metric == "error-rate" and result.error_rate is not None:
+            lines.append(f"- Error rate: **{result.error_rate:.4f}%**")
+        elif metric == "latency" and result.latency_ms is not None:
+            lines.append(
+                f"- p{result.latency_percentile} latency: "
+                f"**{result.latency_ms:.2f} ms**"
+            )
+        else:
+            raise RundownError(f"rundown result is missing selected metric {metric}")
+    lines.extend(("", f"[Open the exact query in Dynatrace]({result.link})"))
+    return "\n".join(lines)
 
 
 def parse_args() -> argparse.Namespace:
@@ -261,6 +305,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--service", required=True)
     parser.add_argument("--lookback", default="1d")
     parser.add_argument("--end-time", help="Optional RFC 3339 end time for reproduction.")
+    parser.add_argument(
+        "--metric",
+        action="append",
+        choices=RUNDOWN_METRICS,
+        default=[],
+        help="Metric to include; repeat as needed. Defaults to all four.",
+    )
+    parser.add_argument("--latency-percentile", type=int, default=95)
     return parser.parse_args()
 
 
@@ -272,6 +324,8 @@ def main() -> None:
             service=args.service,
             lookback=args.lookback,
             end_time=args.end_time,
+            metrics=tuple(args.metric),
+            latency_percentile=args.latency_percentile,
         )
     except (RundownError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)

@@ -97,6 +97,56 @@ class RunServiceRundownTest(unittest.TestCase):
         self.assertIn('to: "2026-08-20T22:24:02Z"', linked_dql)
         self.assertIn("scalar: true", linked_dql)
 
+    def test_focused_request_question_omits_unrequested_metrics(self) -> None:
+        runner = FakeRunner()
+        result = execute_rundown(
+            environment="prd",
+            service="sf-item",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+            metrics=("requests",),
+        )
+        markdown = render_markdown(result)
+        query = next(command[4] for command in runner.commands if "query" in command)
+
+        self.assertIn("Requests: **81,320,208**", markdown)
+        self.assertNotIn("Failed requests", markdown)
+        self.assertNotIn("Error rate", markdown)
+        self.assertNotIn("latency", markdown)
+        self.assertNotIn("failed_requests", query)
+        self.assertNotIn("response_time", query)
+
+    def test_focused_p99_question_uses_requested_percentile(self) -> None:
+        runner = FakeRunner()
+
+        def p99_runner(command, timeout):
+            completed = runner(command, timeout)
+            if "query" not in command:
+                return completed
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"records": [{"latency_p99_ms": 12.5}]}),
+                stderr="",
+            )
+
+        result = execute_rundown(
+            environment="prd",
+            service="sf-item",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=p99_runner,
+            metrics=("latency",),
+            latency_percentile=99,
+        )
+        markdown = render_markdown(result)
+
+        self.assertIn("p99 latency: **12.50 ms**", markdown)
+        self.assertNotIn("Requests", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()
