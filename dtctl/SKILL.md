@@ -16,7 +16,7 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
 - Back every material conclusion with observed values, the exact context and DQL, and a direct Dynatrace link.
-- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw DQL query in Logs & Events; never route evidence through notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
+- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw, multiline DQL query in the classic Logs and Events app with Advanced mode enabled; never route evidence through the Logs app, notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
 - Keep secrets, customer data, full log content, and sensitive captured headers out of URLs and summaries.
 
 ## Start safely
@@ -74,7 +74,7 @@ fetch spans, from:"WINDOW-START", to:"WINDOW-END"
 | limit 20
 ```
 
-Confirm that the hostname matches the selected context and that the decoded Logs & Events payload preserves the exact DQL, absolute timeframe, and trace ID. Use a descriptive Markdown link such as `[Query the failed trace in Dynatrace](URL)`, state the observed status/duration already returned, and say that investigation is continuing. Keep the same link in the final evidence table.
+Confirm that the hostname matches the selected context and that decoding the Logs and Events fragment preserves the exact DQL, line breaks, absolute timeframe, and trace ID. Use a descriptive Markdown link such as `[Query the failed trace in Dynatrace](URL)`, state the observed status/duration already returned, and say that investigation is continuing. Keep the same link in the final evidence table.
 
 If link generation fails, report the exact trace ID as **unlinked interim evidence** and continue; do not imply that a working link exists.
 
@@ -114,7 +114,7 @@ Retain a proof bundle for every material claim:
 - direct tenant-correct Dynatrace link;
 - correlation strength and any permission, retention, sampling, or scan caveat.
 
-Generate Logs & Events DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
+Generate Logs and Events Advanced-mode DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Format linked DQL with the data source on the first line and each pipeline command on its own subsequent line; never flatten a query into one long line for a URL. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
 
 Place descriptive links beside supported claims and include a compact final evidence table. Read [references/evidence-links.md](references/evidence-links.md) when generating log, metric, or selective-query links and before writing the final answer.
 
