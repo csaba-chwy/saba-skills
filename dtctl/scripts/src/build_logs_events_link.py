@@ -37,6 +37,26 @@ def normalize_dql(value: str) -> str:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
     if not normalized.strip():
         raise ValueError("DQL file must not be empty")
+    for line in normalized.splitlines():
+        quote_character: str | None = None
+        escaped = False
+        for index, character in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\" and quote_character is not None:
+                escaped = True
+                continue
+            if character in {'"', "'"}:
+                if quote_character == character:
+                    quote_character = None
+                elif quote_character is None:
+                    quote_character = character
+                continue
+            if character == "|" and quote_character is None and line[:index].strip():
+                raise ValueError(
+                    "put every DQL pipeline command on its own line before linking"
+                )
     return normalized
 
 

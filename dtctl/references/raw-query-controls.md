@@ -38,7 +38,12 @@ For large requested ranges, keep the full range and sample after the metric pass
 6. Retrieve small unsampled examples only after discovering selective exact fields.
 
 ```bash
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-7d | filter k8s.workload.name == "EXACT-WORKLOAD" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.pod.name | sort timestamp desc | limit 20' --fetch-timeout-seconds 60 --default-sampling-ratio 100 --default-scan-limit-gbytes 5 --metadata=scannedBytes,sampled,analysisTimeframe -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-7d
+| filter k8s.workload.name == "EXACT-WORKLOAD"
+| filter loglevel == "ERROR"
+| fields timestamp, content, trace_id, span_id, k8s.pod.name
+| sort timestamp desc
+| limit 20' --fetch-timeout-seconds 60 --default-sampling-ratio 100 --default-scan-limit-gbytes 5 --metadata=scannedBytes,sampled,analysisTimeframe -o json --plain
 ```
 
 Sampling can miss rare events and distort rankings. Treat samples as classification evidence, not population counts.

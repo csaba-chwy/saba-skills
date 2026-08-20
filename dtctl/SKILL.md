@@ -63,7 +63,7 @@ The runner deterministically:
 1. Resolves an absolute UTC window.
 2. Verifies the matching context URL, `readonly` safety level, and reusable OAuth session.
 3. Runs one bounded query containing only the selected measures and their required inputs.
-4. Prints ready-to-send Markdown with one exact Dynatrace Logs and Events table link.
+4. Prints ready-to-send Markdown with one exact Dynatrace metric-query table link.
 
 Run the command with normal network and macOS Keychain access when the execution sandbox requires it. Return its stdout directly and stop. Do not add interpretation, another query, logs, spans, entity lookup, a proof table, or a follow-up investigation unless the user asked for it.
 
@@ -83,10 +83,10 @@ For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 2. Read [mappings.md](mappings.md) only to normalize the target, then read only its linked service note and [references/query-strategy.md](references/query-strategy.md).
 3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window.
 4. Query only the logs or spans needed to answer the explicit question. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
-5. Generate direct evidence links with the bundled Python link builders. Read [references/evidence-links.md](references/evidence-links.md) when generating those links.
+5. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.
 6. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, concise conclusions, and links beside the claims they support.
 
-When a failed request yields a valid 32-character `trace.id`, immediately link this bounded query before continuing:
+When a failed request yields a valid 32-character `trace.id`, immediately generate a bounded `dynatrace.distributedtracing/view-trace` intent link before continuing. Use the exact `trace.id` and incident timeframe; do not send exact-trace evidence to Logs and Events. Continue to query spans only when more analysis is needed:
 
 ```dql
 fetch spans, from:"WINDOW-START", to:"WINDOW-END"
@@ -104,9 +104,10 @@ For independent deep-investigation branches, read [references/parallel-investiga
 - For `fetch logs` or `fetch spans`, apply a selective filter before sorting, return only needed fields, end with `limit 20`, and begin at `--default-scan-limit-gbytes 5`.
 - Narrow a timed-out or capped query before raising its scan limit. Get approval for an unsampled raw window over two hours, a weak selector, a custom bucket, or a cap above 50 GB.
 - Keep customer data, captured headers, secrets, and full log content out of links and summaries.
+- Format every log query for people as well as machines: put `fetch logs` on the first line and every `|` pipeline command on its own subsequent line in commands, temporary DQL files, and links.
 
-## Link builders
+## Evidence links
 
-Use `scripts/src/build_logs_events_link.py` for scalar summaries and record tables. Use `scripts/src/build_logs_events_graph_link.py` only when the user explicitly asks for a time trend. Both encode multiline DQL into the classic Logs and Events Advanced-mode route without opening a browser or creating Dynatrace resources.
+Match the link destination to the evidence. Use `dtctl open intent` for app-native resources such as an exact trace or Synthetic monitor. Use `scripts/src/build_logs_events_link.py` for scalar metric summaries, logs, and other DQL record tables. Use `scripts/src/build_logs_events_graph_link.py` only when the user explicitly asks for a metric time trend. The graph helper preserves native time buckets and the time axis; never replace that visual evidence with a scalar table or client-rendered chart.
 
 Keep the entire workflow read-only; dashboards, notebooks, workflows, settings, extensions, buckets, and other Dynatrace resources stay unchanged.

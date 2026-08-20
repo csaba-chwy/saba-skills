@@ -28,7 +28,12 @@ Query multiple requested regions together and group by tagged service or workloa
 ```bash
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count, scalar:true), by:{service.name}, filter:{startsWith(service.name, "[ENVIRONMENT]") and contains(service.name, "[REGION]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:-15m | fields service.name, requests | limit 20' --fetch-timeout-seconds 60 -o json --plain
 
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT" | filter contains(k8s.workload.name, "[REGION]") | fields timestamp, k8s.workload.name, region, loglevel, trace_id, span_id | sort timestamp desc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m
+| filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT"
+| filter contains(k8s.workload.name, "[REGION]")
+| fields timestamp, k8s.workload.name, region, loglevel, trace_id, span_id
+| sort timestamp desc
+| limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 ```
 
 ## Resolve entity IDs only when needed
@@ -121,7 +126,12 @@ If metrics have no data, do not conclude that logs are absent. Probe the paired 
 
 ```bash
 # Recent errors for one logical service
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m | filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT" | filter loglevel == "ERROR" | fields timestamp, content, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp desc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:now()-15m
+| filter log.source == "TELEMETRY-STEM" and env == "ENVIRONMENT"
+| filter loglevel == "ERROR"
+| fields timestamp, content, trace_id, span_id, k8s.workload.name, k8s.pod.name
+| sort timestamp desc
+| limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
 # Failed-request trend
 dtctl --context "$DT_CONTEXT" query 'timeseries failures=sum(dt.service.request.count), interval:5m, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") and failed == true}, from:-1h | fields timeframe, interval, failures | limit 20' --fetch-timeout-seconds 60 -o json --plain
