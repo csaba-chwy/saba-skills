@@ -41,7 +41,7 @@ Workers return as soon as their exclusive question is materially answered. They 
 Include:
 
 ```text
-Context: sandbox (fixed; do not change)
+Context: prod|nonprod (fixed; do not change)
 Environment URL: verified selected production or nonproduction URL (fixed; do not change)
 Tenant URL: configured URL
 Absolute window: FROM to TO

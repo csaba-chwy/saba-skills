@@ -1,6 +1,6 @@
 # dtctl environment setup
 
-Authenticate to the selected Dynatrace environment with browser-based OAuth. Nonproduction covers `stg`, `qat`, and `dev`; production is only for `prd`. The shared `sandbox` context points to one environment at a time and is always read-only.
+Authenticate to Dynatrace with browser-based OAuth. Use the `nonprod` context for `stg`, `qat`, and `dev`, and use the `prod` context only for `prd`. Both contexts are always read-only.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ These variables contain environment URLs, not platform tokens. Platform-token en
 
 ## Log in
 
-Run the command for the target environment. Each command opens the Dynatrace OAuth browser flow, stores the resulting OAuth credentials securely, and creates or refreshes the `sandbox` context with read-only safety.
+Run the command for the target environment. Each command opens the Dynatrace OAuth browser flow, stores the resulting OAuth credentials securely, and creates or refreshes the matching context with read-only safety.
 
 For `stg`, `qat`, or `dev`:
 
@@ -22,7 +22,7 @@ For `stg`, `qat`, or `dev`:
 [[ "$DTCTL_NONPROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_NONPROD_ENVIRONMENT must be an https URL'; exit 1; }
 
 dtctl auth login \
-  --context sandbox \
+  --context nonprod \
   --environment "$DTCTL_NONPROD_ENVIRONMENT" \
   --safety-level readonly
 ```
@@ -34,30 +34,32 @@ For `prd`:
 [[ "$DTCTL_PROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT must be an https URL'; exit 1; }
 
 dtctl auth login \
-  --context sandbox \
+  --context prod \
   --environment "$DTCTL_PROD_ENVIRONMENT" \
   --safety-level readonly
 ```
 
-Production must always use `--safety-level readonly`. Do not substitute `readwrite-mine`, `readwrite-all`, or `dangerously-unrestricted`. Because both commands update the same context, running one replaces the `sandbox` context's selected environment; never use its prior tenant URL as proof of the current target.
+Production must always use `--safety-level readonly`. Do not substitute `readwrite-mine`, `readwrite-all`, or `dangerously-unrestricted`. Keep each context bound to its matching environment URL; never configure `prod` with `DTCTL_NONPROD_ENVIRONMENT` or `nonprod` with `DTCTL_PROD_ENVIRONMENT`.
 
 ## Verify the selected environment
 
-Confirm the context URL, OAuth status, read-only safety level, and access to each telemetry type:
+Select the context that matches the target, then confirm its URL, OAuth status, read-only safety level, and access to each telemetry type:
 
 ```bash
-dtctl config describe-context sandbox --plain
-dtctl --context sandbox auth status --plain
+DT_CONTEXT=nonprod # Use prod only for prd.
 
-dtctl --context sandbox query \
+dtctl config describe-context "$DT_CONTEXT" --plain
+dtctl --context "$DT_CONTEXT" auth status --plain
+
+dtctl --context "$DT_CONTEXT" query \
   'timeseries requests=sum(dt.service.request.count, scalar:true), from:-15m | fields requests | limit 1' \
   --fetch-timeout-seconds 60 -o json --plain
 
-dtctl --context sandbox query \
+dtctl --context "$DT_CONTEXT" query \
   'fetch spans, from:now()-15m | fields start_time, trace.id | sort start_time desc | limit 1' \
   --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
-dtctl --context sandbox query \
+dtctl --context "$DT_CONTEXT" query \
   'fetch logs, from:now()-15m | fields timestamp, loglevel | sort timestamp desc | limit 1' \
   --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 ```

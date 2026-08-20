@@ -9,9 +9,9 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 
 ## Non-negotiable contract
 
-- Select `DTCTL_PROD_ENVIRONMENT` only for `[prd]`; select `DTCTL_NONPROD_ENVIRONMENT` for `[stg]`, `[qat]`, and `[dev]`. If the environment is not explicit, ask. Never cross the production boundary as a fallback.
-- Authenticate the selected environment with browser-based OAuth into the `sandbox` context. Do not use platform-token environment variables or `dtctl config set-credentials`.
-- Always create or refresh the `sandbox` context with `--safety-level readonly`. This is mandatory for production and must not be relaxed for nonproduction.
+- Select the `prod` context with `DTCTL_PROD_ENVIRONMENT` only for `[prd]`; select the `nonprod` context with `DTCTL_NONPROD_ENVIRONMENT` for `[stg]`, `[qat]`, and `[dev]`. If the environment is not explicit, ask. Never cross the production boundary as a fallback.
+- Authenticate the selected environment with browser-based OAuth into its matching `prod` or `nonprod` context. Do not use any other context name, platform-token environment variables, or `dtctl config set-credentials`.
+- Always create or refresh both contexts with `--safety-level readonly`. This is mandatory for production and must not be relaxed for nonproduction.
 - Pass `--context "$DT_CONTEXT"` on every `dtctl` command. Confirm the context URL and auth before querying.
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
@@ -25,11 +25,10 @@ Normalize the target into its environment tag, environment value, and telemetry 
 
 ```bash
 case "$SERVICE_NAME" in
-  "[prd]"*) DT_ENVIRONMENT="$DTCTL_PROD_ENVIRONMENT" ;;
-  "[stg]"*|"[qat]"*|"[dev]"*) DT_ENVIRONMENT="$DTCTL_NONPROD_ENVIRONMENT" ;;
+  "[prd]"*) DT_CONTEXT=prod; DT_ENVIRONMENT="$DTCTL_PROD_ENVIRONMENT" ;;
+  "[stg]"*|"[qat]"*|"[dev]"*) DT_CONTEXT=nonprod; DT_ENVIRONMENT="$DTCTL_NONPROD_ENVIRONMENT" ;;
   *) print -u2 'Cannot determine Dynatrace context from service name'; exit 1 ;;
 esac
-DT_CONTEXT=sandbox
 [[ "$DT_ENVIRONMENT" == https://* ]] || { print -u2 'Selected Dynatrace environment is not configured as an https URL'; exit 1; }
 dtctl auth login \
   --context "$DT_CONTEXT" \
@@ -39,7 +38,7 @@ dtctl config describe-context "$DT_CONTEXT" --plain
 dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
-Confirm that the environment reported by `describe-context` exactly matches `DT_ENVIRONMENT` before querying. The `sandbox` context points to one environment at a time, so never reuse it across a production boundary without running the matching login command again and rechecking the URL and safety level. If OAuth or a keychain-backed credential is unavailable only inside the sandbox, retry the same command once with normal browser and Keychain access rather than changing tools or authentication. Once that retry proves the context uses macOS Keychain credentials, run every later `dtctl` command in this investigation with normal Keychain access on its first attempt. Do not incur a sandbox failure and approval wait for every query.
+Confirm that the environment reported by `describe-context` exactly matches `DT_ENVIRONMENT` before querying. Never bind the `prod` context to the nonproduction URL or the `nonprod` context to the production URL. If OAuth or a keychain-backed credential is unavailable only inside the restricted execution environment, retry the same command once with normal browser and Keychain access rather than changing tools or authentication. Once that retry proves the context uses macOS Keychain credentials, run every later `dtctl` command with normal Keychain access on its first attempt. Do not incur a restricted-environment failure and approval wait for every query.
 
 ## Apply the shared service baseline
 
