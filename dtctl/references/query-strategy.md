@@ -49,6 +49,32 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
 
+For a basic service rundown, build one plot-ready query instead of assembling three independent results:
+
+```bash
+python3 scripts/src/build_service_rundown_query.py \
+  --environment prd \
+  --service sf-item \
+  --from-time 2026-08-19T21:37:11Z \
+  --to-time 2026-08-20T21:37:11Z \
+  --interval 15m
+```
+
+Run its output with `dtctl query` and render the aligned arrays as separate request-count, error-rate, and p95-latency panels. The builder converts the response-time metric from its native microseconds to milliseconds. Keep the default aggregated across the logical service. For a more specific follow-up, repeat `--group-by` for confirmed low-cardinality fields or repeat `--additional-filter` with a single pipeline-free DQL expression:
+
+```bash
+python3 scripts/src/build_service_rundown_query.py \
+  --environment prd \
+  --service sf-item \
+  --from-time 2026-08-20T20:00:00Z \
+  --to-time 2026-08-20T21:00:00Z \
+  --interval 5m \
+  --group-by service.name \
+  --additional-filter 'contains(service.name, "[use1]")'
+```
+
+Use only dimensions already confirmed for the metrics. Keep secrets and customer identifiers out of additional filters and output links.
+
 For a broad traffic or performance review, preserve metric arrays so Logs and Events Classic can render a time-series bar chart with time on the x-axis. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt, and select an explicit interval appropriate to the requested window:
 
 ```bash
