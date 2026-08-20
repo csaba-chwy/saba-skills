@@ -9,9 +9,71 @@ import re
 
 
 ENVIRONMENTS = ("prd", "stg", "qat", "dev")
+RUNDOWN_METRICS = ("requests", "failures", "error-rate", "latency")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 INTERVAL_RE = re.compile(r"^[1-9][0-9]*(?:ns|us|ms|s|m|h|d|w)$")
 SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def normalize_metrics(metrics: tuple[str, ...]) -> tuple[str, ...]:
+    selected = metrics or RUNDOWN_METRICS
+    invalid = set(selected) - set(RUNDOWN_METRICS)
+    if invalid:
+        raise ValueError(
+            "metrics must be selected from: " + ", ".join(RUNDOWN_METRICS)
+        )
+    return tuple(metric for metric in RUNDOWN_METRICS if metric in selected)
+
+
+def _metric_parts(
+    metrics: tuple[str, ...],
+    *,
+    latency_percentile: int,
+    scalar: bool,
+) -> tuple[list[str], list[str], list[str]]:
+    selected = normalize_metrics(metrics)
+    scalar_option = ", scalar: true" if scalar else ""
+    array_suffix = "" if scalar else "[]"
+    expressions: list[str] = []
+    derived: list[str] = []
+    fields: list[str] = []
+
+    if "requests" in selected or "error-rate" in selected:
+        expressions.append(
+            f"requests = sum(dt.service.request.count{scalar_option})"
+        )
+    if "failures" in selected or "error-rate" in selected:
+        expressions.append(
+            "failed_requests = sum(dt.service.request.count, "
+            f"filter: {{ failed == true }}, default: 0{scalar_option})"
+        )
+    if "latency" in selected:
+        expressions.append(
+            f"latency_p{latency_percentile}_us = percentile("
+            "dt.service.request.response_time, "
+            f"{latency_percentile}{scalar_option})"
+        )
+
+    if "error-rate" in selected:
+        derived.append(
+            f"error_rate = if(requests{array_suffix} > 0, "
+            f"100.0 * failed_requests{array_suffix} / requests{array_suffix}, "
+            "else: 0.0)"
+        )
+    if "latency" in selected:
+        derived.append(
+            f"latency_p{latency_percentile}_ms = "
+            f"latency_p{latency_percentile}_us{array_suffix} / 1000.0"
+        )
+
+    output_names = {
+        "requests": "requests",
+        "failures": "failed_requests",
+        "error-rate": "error_rate",
+        "latency": f"latency_p{latency_percentile}_ms",
+    }
+    fields.extend(output_names[metric] for metric in selected)
+    return expressions, derived, fields
 
 
 def _validate_identifier(value: str) -> str:
@@ -50,8 +112,9 @@ def build_rundown_query(
     group_by: tuple[str, ...] = (),
     additional_filters: tuple[str, ...] = (),
     latency_percentile: int = 95,
+    metrics: tuple[str, ...] = (),
 ) -> str:
-    """Return one link-ready DQL query for traffic, errors, and latency."""
+    """Return one link-ready metric timeline for the requested measures."""
     if environment not in ENVIRONMENTS:
         raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
     if not SERVICE_RE.fullmatch(service):
@@ -76,26 +139,24 @@ def build_rundown_query(
     combined_filter = " and ".join((service_filter, *extra_filters))
     by_clause = f", by: {{ {', '.join(dimensions)} }}" if dimensions else ""
     dimension_fields = f", {', '.join(dimensions)}" if dimensions else ""
-    percentile_field = f"latency_p{latency_percentile}_us"
-    latency_ms_field = f"latency_p{latency_percentile}_ms"
-
-    return "\n".join(
-        (
-            "timeseries {",
-            "  requests = sum(dt.service.request.count),",
-            "  failed_requests = sum(dt.service.request.count, "
-            "filter: { failed == true }, default: 0),",
-            f"  {percentile_field} = percentile("
-            f"dt.service.request.response_time, {latency_percentile})",
-            f"}}, interval: {interval}{by_clause}, filter: {{ {combined_filter} }}, "
-            f'from: "{start}", to: "{end}", nonempty: true',
-            "| fieldsAdd error_rate = if(requests[] > 0, "
-            "100.0 * failed_requests[] / requests[], else: 0.0), "
-            f"{latency_ms_field} = {percentile_field}[] / 1000.0",
-            f"| fields timeframe, interval{dimension_fields}, requests, error_rate, "
-            f"{latency_ms_field}",
-        )
+    expressions, derived, fields = _metric_parts(
+        metrics, latency_percentile=latency_percentile, scalar=False
     )
+    lines = ["timeseries {"]
+    lines.extend(
+        f"  {expression}{',' if index < len(expressions) - 1 else ''}"
+        for index, expression in enumerate(expressions)
+    )
+    lines.append(
+        f"}}, interval: {interval}{by_clause}, filter: {{ {combined_filter} }}, "
+        f'from: "{start}", to: "{end}", nonempty: true'
+    )
+    if derived:
+        lines.append("| fieldsAdd " + ", ".join(derived))
+    lines.append(
+        f"| fields timeframe, interval{dimension_fields}, {', '.join(fields)}"
+    )
+    return "\n".join(lines)
 
 
 def build_scalar_rundown_query(
@@ -105,8 +166,9 @@ def build_scalar_rundown_query(
     start: str,
     end: str,
     latency_percentile: int = 95,
+    metrics: tuple[str, ...] = (),
 ) -> str:
-    """Return one scalar DQL query for a concise service rundown."""
+    """Return one scalar DQL query for the requested service measures."""
     if environment not in ENVIRONMENTS:
         raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
     if not SERVICE_RE.fullmatch(service):
@@ -122,25 +184,22 @@ def build_scalar_rundown_query(
         f'startsWith(service.name, "[{environment}]") and '
         f'endsWith(service.name, "]{service}")'
     )
-    percentile_field = f"latency_p{latency_percentile}_us"
-    latency_ms_field = f"latency_p{latency_percentile}_ms"
-
-    return "\n".join(
-        (
-            "timeseries {",
-            "  requests = sum(dt.service.request.count, scalar: true),",
-            "  failed_requests = sum(dt.service.request.count, "
-            "filter: { failed == true }, default: 0, scalar: true),",
-            f"  {percentile_field} = percentile("
-            f"dt.service.request.response_time, {latency_percentile}, scalar: true)",
-            f"}}, filter: {{ {service_filter} }}, "
-            f'from: "{start}", to: "{end}", nonempty: true',
-            "| fieldsAdd error_rate = if(requests > 0, "
-            "100.0 * failed_requests / requests, else: 0.0), "
-            f"{latency_ms_field} = {percentile_field} / 1000.0",
-            f"| fields requests, failed_requests, error_rate, {latency_ms_field}",
-        )
+    expressions, derived, fields = _metric_parts(
+        metrics, latency_percentile=latency_percentile, scalar=True
     )
+    lines = ["timeseries {"]
+    lines.extend(
+        f"  {expression}{',' if index < len(expressions) - 1 else ''}"
+        for index, expression in enumerate(expressions)
+    )
+    lines.append(
+        f"}}, filter: {{ {service_filter} }}, "
+        f'from: "{start}", to: "{end}", nonempty: true'
+    )
+    if derived:
+        lines.append("| fieldsAdd " + ", ".join(derived))
+    lines.append(f"| fields {', '.join(fields)}")
+    return "\n".join(lines)
 
 
 def parse_args() -> argparse.Namespace:
@@ -168,6 +227,13 @@ def parse_args() -> argparse.Namespace:
         help="Pipeline-free DQL expression; repeat to narrow a follow-up.",
     )
     parser.add_argument("--latency-percentile", type=int, default=95)
+    parser.add_argument(
+        "--metric",
+        action="append",
+        choices=RUNDOWN_METRICS,
+        default=[],
+        help="Metric to include; repeat as needed. Defaults to all four.",
+    )
     return parser.parse_args()
 
 
@@ -183,6 +249,7 @@ def main() -> None:
             group_by=tuple(args.group_by),
             additional_filters=tuple(args.additional_filter),
             latency_percentile=args.latency_percentile,
+            metrics=tuple(args.metric),
         )
     )
 

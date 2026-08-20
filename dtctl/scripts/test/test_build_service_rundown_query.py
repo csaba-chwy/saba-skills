@@ -15,7 +15,7 @@ from build_logs_events_graph_link import build_graph_link
 
 
 class BuildServiceRundownQueryTest(unittest.TestCase):
-    def test_builds_default_three_metric_timeline(self) -> None:
+    def test_builds_default_health_timeline(self) -> None:
         result = build_rundown_query(
             environment="prd",
             service="sf-item",
@@ -39,6 +39,20 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn('startsWith(service.name, "[prd]")', result)
         self.assertIn('endsWith(service.name, "]sf-item")', result)
         self.assertNotIn("by: {", result)
+
+    def test_builds_request_only_timeline_for_focused_question(self) -> None:
+        result = build_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T21:37:11Z",
+            end="2026-08-20T21:37:11Z",
+            metrics=("requests",),
+        )
+
+        self.assertIn("requests = sum(dt.service.request.count)", result)
+        self.assertIn("fields timeframe, interval, requests", result)
+        self.assertNotIn("failed_requests", result)
+        self.assertNotIn("response_time", result)
 
     def test_adapts_grouping_filter_interval_and_percentile(self) -> None:
         result = build_rundown_query(
@@ -108,6 +122,31 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn("timeseries {", result.stdout)
         self.assertIn("latency_p95_ms", result.stdout)
 
+    def test_cli_limits_query_to_selected_metric(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SRC_DIR / "build_service_rundown_query.py"),
+                "--environment",
+                "prd",
+                "--service",
+                "sf-item",
+                "--from-time",
+                "2026-08-19T21:37:11Z",
+                "--to-time",
+                "2026-08-20T21:37:11Z",
+                "--metric",
+                "requests",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn("fields timeframe, interval, requests", result.stdout)
+        self.assertNotIn("failed_requests", result.stdout)
+        self.assertNotIn("response_time", result.stdout)
+
     def test_rundown_query_is_accepted_by_time_axis_graph_link(self) -> None:
         dql = build_rundown_query(
             environment="prd",
@@ -139,6 +178,44 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn(
             "fields requests, failed_requests, error_rate, latency_p95_ms", result
         )
+
+    def test_scalar_query_fetches_only_the_requested_measure(self) -> None:
+        requests = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+            metrics=("requests",),
+        )
+        error_rate = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+            metrics=("error-rate",),
+        )
+
+        self.assertIn("fields requests", requests)
+        self.assertNotIn("failed_requests", requests)
+        self.assertNotIn("response_time", requests)
+        self.assertIn("requests = sum", error_rate)
+        self.assertIn("failed_requests = sum", error_rate)
+        self.assertIn("fields error_rate", error_rate)
+        self.assertNotIn("response_time", error_rate)
+
+    def test_scalar_query_supports_requested_latency_percentile(self) -> None:
+        result = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+            metrics=("latency",),
+            latency_percentile=99,
+        )
+
+        self.assertIn("response_time, 99, scalar: true", result)
+        self.assertIn("fields latency_p99_ms", result)
+        self.assertNotIn("request.count", result)
 
 
 if __name__ == "__main__":

@@ -49,7 +49,7 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
 
-For a basic service rundown, run the scalar workflow from the skill directory:
+For a basic service rundown or focused aggregate metric question, run the scalar workflow from the skill directory:
 
 ```bash
 python3 scripts/src/run_service_rundown.py \
@@ -60,6 +60,23 @@ python3 scripts/src/run_service_rundown.py \
 
 It performs context preflight, runs one scalar request/error/latency query, and emits ready-to-send Markdown with a table-style Dynatrace link. Stop there for summary requests.
 
+Select only the requested measure for a focused question. This avoids calculating response-time percentiles for request-count questions or request/error measures for latency-only questions:
+
+```bash
+python3 scripts/src/run_service_rundown.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1h \
+  --metric requests
+
+python3 scripts/src/run_service_rundown.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1h \
+  --metric latency \
+  --latency-percentile 99
+```
+
 For a requested regional, endpoint, or time-series follow-up, build a bounded timeline with confirmed low-cardinality dimensions:
 
 ```bash
@@ -69,6 +86,7 @@ python3 scripts/src/build_service_rundown_query.py \
   --from-time 2026-08-20T20:00:00Z \
   --to-time 2026-08-20T21:00:00Z \
   --interval 5m \
+  --metric requests \
   --group-by service.name \
   --additional-filter 'contains(service.name, "[use1]")'
 ```

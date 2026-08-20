@@ -2,7 +2,7 @@
 
 Use this reference for browser-free metric graphs, record tables, trace-query links, and final-report links. The top-level skill contains the mandatory early trace-query rule.
 
-For a quick rundown, `scripts/src/run_service_rundown.py` generates and validates the scalar table link; return its output without rebuilding the link here.
+For a general health or aggregate metric question, `scripts/src/run_service_rundown.py` generates and validates the scalar table link; return its output without rebuilding the link here.
 
 ## Proof and link contract
 
@@ -15,7 +15,7 @@ Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plai
 - Use a **time-series bar chart** for metric prompts about traffic, request volume, performance, latency, or failures over a bounded range. Preserve the native `timeframe`, `interval`, and numeric arrays so time is always the x-axis. Logs and Events Classic does not support a line-chart visualization for these links; an unsupported `visualizationType=lineChart` silently falls back to a table.
 - Use a **table** for one RID, request ID, or trace ID; bounded logs or spans; exact record inspection; scalar rankings; and categorical totals.
 - Give broad reviews a small number of readable series. Prefer region, a few important endpoints, status class, or latency percentiles over dozens of endpoint/status combinations.
-- Put measures with different units or materially different scales in separate graph links. A service rundown should link request count, error rate, and latency separately rather than combine them on one unreadable axis.
+- Put measures with different units or materially different scales in separate graph links when the user explicitly requests multiple trends. General summaries use the runner's scalar table link instead.
 - Never use `scalar:true`, `summarize`, or array-reduction functions to prepare graph DQL. They remove the time dimension and produce a categorical result that belongs in prose or a table link.
 - Never make users decode JSON arrays or redraw them locally. Calculate totals, rates, and percentile summaries from the returned arrays for prose, then provide the corresponding Dynatrace time-series links as supporting evidence.
 
