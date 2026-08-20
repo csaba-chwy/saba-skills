@@ -11,9 +11,19 @@ Install `dtctl` and export these variables from `~/.zshrc`:
 
 These variables contain environment URLs, not platform tokens. Platform-token environment variables are no longer used.
 
-## Log in
+## Reuse an existing login
 
-Run the command for the target environment. Each command opens the Dynatrace OAuth browser flow, stores the resulting OAuth credentials securely, and creates or refreshes the matching context with read-only safety.
+Select the context for the target environment and inspect it before starting a browser login:
+
+```bash
+DT_CONTEXT=nonprod # Use prod only for prd.
+dtctl config describe-context "$DT_CONTEXT" --plain
+dtctl --context "$DT_CONTEXT" auth status --plain
+```
+
+Reuse the context without logging in when its environment URL matches the corresponding configured environment, its safety level is `readonly`, and its browser-based OAuth session has either an unexpired access token or a refresh token. `dtctl` can automatically refresh an expired access token when a refresh token remains, so do not run `dtctl auth login` in that case.
+
+Run the matching login command only when the context is absent or mismatched, or when no usable OAuth access or refresh token remains. The command opens the Dynatrace OAuth browser flow, stores the resulting credentials securely, and creates, repairs, or re-authenticates the context with read-only safety.
 
 For `stg`, `qat`, or `dev`:
 
