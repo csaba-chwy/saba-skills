@@ -49,22 +49,18 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
 
-For a basic service rundown, build one aligned, link-ready query instead of assembling three independent results:
+For a basic service rundown, run the scalar workflow from the skill directory:
 
 ```bash
-python3 scripts/src/build_service_rundown_query.py \
+python3 scripts/src/run_service_rundown.py \
   --environment prd \
   --service sf-item \
-  --from-time 2026-08-19T21:37:11Z \
-  --to-time 2026-08-20T21:37:11Z \
-  --interval 15m
+  --lookback 1d
 ```
 
-Run its output with `dtctl query` and summarize the aligned request-count, error-rate, and p95-latency arrays in prose. The builder converts the response-time metric from its native microseconds to milliseconds. Do not create or inspect a local chart, image, or HTML visualization.
+It performs context preflight, runs one scalar request/error/latency query, and emits ready-to-send Markdown with a table-style Dynatrace link. Stop there for summary requests.
 
-Create three Dynatrace graph-link DQL variants from the successful query by preserving the full `timeseries` and `fieldsAdd` stages while projecting only one measure in the final `fields` stage: `requests`, `error_rate`, or `latency_p95_ms`. Pass each variant to `scripts/src/build_logs_events_graph_link.py`. This keeps one unit and scale per graph, preserves the native arrays and explicit interval, and renders time on the x-axis without rerunning the telemetry query solely for link generation.
-
-Keep the default aggregated across the logical service. For a more specific follow-up, repeat `--group-by` for confirmed low-cardinality fields or repeat `--additional-filter` with a single pipeline-free DQL expression:
+For a requested regional, endpoint, or time-series follow-up, build a bounded timeline with confirmed low-cardinality dimensions:
 
 ```bash
 python3 scripts/src/build_service_rundown_query.py \

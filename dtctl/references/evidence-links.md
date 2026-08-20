@@ -2,6 +2,8 @@
 
 Use this reference for browser-free metric graphs, record tables, trace-query links, and final-report links. The top-level skill contains the mandatory early trace-query rule.
 
+For a quick rundown, `scripts/src/run_service_rundown.py` generates and validates the scalar table link; return its output without rebuilding the link here.
+
 ## Proof and link contract
 
 An investigation is complete only when material conclusions have both observed `dtctl` results and direct Dynatrace links another authenticated user can open. A trace ID, timestamp, entity ID, pod name, copied DQL, or tenant home page is context, not a substitute for a direct evidence link.

@@ -1,0 +1,102 @@
+import base64
+import json
+import subprocess
+import sys
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+
+SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+sys.path.insert(0, str(SRC_DIR))
+
+from run_service_rundown import execute_rundown, render_markdown, resolve_window
+
+
+class FakeRunner:
+    def __init__(self) -> None:
+        self.commands: list[list[str]] = []
+
+    def __call__(self, command, timeout):
+        self.commands.append(list(command))
+        if command[1:3] == ["config", "describe-context"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=(
+                    "Environment:  https://prod.example.com\n"
+                    "Safety Level: readonly\n"
+                ),
+                stderr="",
+            )
+        if command[1:4] == ["--context", "prod", "auth"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=(
+                    "Auth type: OAuth\n"
+                    "Access token: expired\n"
+                    "Refresh token: present\n"
+                ),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "records": [
+                        {
+                            "requests": 81_320_208,
+                            "failed_requests": 63_604,
+                            "error_rate": 0.07821426133095971,
+                            "latency_p95_ms": 7.200360277845569,
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+        )
+
+
+class RunServiceRundownTest(unittest.TestCase):
+    def test_resolves_exact_absolute_window(self) -> None:
+        start, end = resolve_window(
+            "1d", now=datetime(2026, 8, 20, 22, 24, 2, tzinfo=timezone.utc)
+        )
+
+        self.assertEqual(start, "2026-08-19T22:24:02Z")
+        self.assertEqual(end, "2026-08-20T22:24:02Z")
+
+    def test_runs_one_query_and_renders_ready_markdown(self) -> None:
+        runner = FakeRunner()
+        result = execute_rundown(
+            environment="prd",
+            service="sf-item",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+        markdown = render_markdown(result)
+
+        query_commands = [command for command in runner.commands if "query" in command]
+        self.assertEqual(len(query_commands), 1)
+        self.assertIn("--fetch-timeout-seconds", query_commands[0])
+        self.assertIn("81,320,208", markdown)
+        self.assertIn("63,604", markdown)
+        self.assertIn("0.0782%", markdown)
+        self.assertIn("7.20 ms", markdown)
+        self.assertIn("visualizationType=table", markdown)
+        self.assertNotIn("barChart", markdown)
+        linked_dql = unquote(
+            base64.b64decode(urlsplit(result.link).fragment).decode("utf-8")
+        )
+        self.assertIn('from: "2026-08-19T22:24:02Z"', linked_dql)
+        self.assertIn('to: "2026-08-20T22:24:02Z"', linked_dql)
+        self.assertIn("scalar: true", linked_dql)
+
+
+if __name__ == "__main__":
+    unittest.main()
