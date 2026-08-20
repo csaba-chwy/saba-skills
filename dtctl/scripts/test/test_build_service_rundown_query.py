@@ -8,6 +8,7 @@ SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
 from build_service_rundown_query import build_rundown_query
+from build_logs_events_graph_link import build_graph_link
 
 
 class BuildServiceRundownQueryTest(unittest.TestCase):
@@ -103,6 +104,21 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
 
         self.assertIn("timeseries {", result.stdout)
         self.assertIn("latency_p95_ms", result.stdout)
+
+    def test_rundown_query_is_accepted_by_time_axis_graph_link(self) -> None:
+        dql = build_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T21:37:11Z",
+            end="2026-08-20T21:37:11Z",
+        )
+
+        result = build_graph_link(
+            "https://example.apps.dynatrace.com",
+            dql,
+        )
+
+        self.assertIn("visualizationType=barChart", result)
 
 
 if __name__ == "__main__":
