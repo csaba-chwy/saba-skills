@@ -1,6 +1,6 @@
 # dtctl environment setup
 
-Configure separate read-only Dynatrace contexts for nonproduction and production. Nonproduction covers `stg`, `qat`, and `dev`; production is only for `prd`.
+Authenticate to the selected Dynatrace environment with browser-based OAuth. Nonproduction covers `stg`, `qat`, and `dev`; production is only for `prd`. The shared `sandbox` context points to one environment at a time and is always read-only.
 
 ## Prerequisites
 
@@ -8,49 +8,58 @@ Install `dtctl` and export these variables from `~/.zshrc`:
 
 - `DTCTL_NONPROD_ENVIRONMENT`
 - `DTCTL_PROD_ENVIRONMENT`
-- `DT_NONPROD_PLATFORM_TOKEN`
-- `DT_PROD_PLATFORM_TOKEN`
 
-Never print or commit the token values.
+These variables contain environment URLs, not platform tokens. Platform-token environment variables are no longer used.
 
-## Configure credentials and contexts
+## Log in
 
-Run the following in zsh. It reloads the variables, stores each token under a separate macOS Keychain entry, creates read-only contexts, verifies both environments, and leaves nonproduction as the default context.
+Run the command for the target environment. Each command opens the Dynatrace OAuth browser flow, stores the resulting OAuth credentials securely, and creates or refreshes the `sandbox` context with read-only safety.
+
+For `stg`, `qat`, or `dev`:
 
 ```bash
-set +x
-source ~/.zshrc
-
 [[ -n "${DTCTL_NONPROD_ENVIRONMENT:-}" ]] || { print -u2 'DTCTL_NONPROD_ENVIRONMENT is not set'; exit 1; }
-[[ -n "${DTCTL_PROD_ENVIRONMENT:-}" ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT is not set'; exit 1; }
-[[ -n "${DT_NONPROD_PLATFORM_TOKEN:-}" ]] || { print -u2 'DT_NONPROD_PLATFORM_TOKEN is not set'; exit 1; }
-[[ -n "${DT_PROD_PLATFORM_TOKEN:-}" ]] || { print -u2 'DT_PROD_PLATFORM_TOKEN is not set'; exit 1; }
 [[ "$DTCTL_NONPROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_NONPROD_ENVIRONMENT must be an https URL'; exit 1; }
-[[ "$DTCTL_PROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT must be an https URL'; exit 1; }
 
-dtctl config set-credentials nonprod-token --token "$DT_NONPROD_PLATFORM_TOKEN" --plain
-dtctl config set-credentials prod-token --token "$DT_PROD_PLATFORM_TOKEN" --plain
-
-dtctl config set-context nonprod \
+dtctl auth login \
+  --context sandbox \
   --environment "$DTCTL_NONPROD_ENVIRONMENT" \
-  --token-ref nonprod-token \
-  --safety-level readonly \
-  --description 'Nonproduction: stg, qat, dev' \
-  --plain
-
-dtctl config set-context prod \
-  --environment "$DTCTL_PROD_ENVIRONMENT" \
-  --token-ref prod-token \
-  --safety-level readonly \
-  --description 'Production: prd' \
-  --plain
-
-dtctl --context nonprod auth status --plain
-dtctl --context prod auth status --plain
-dtctl --context nonprod query 'fetch dt.entity.service | fields id | limit 1' --default-scan-limit-gbytes 1 -o json --plain
-dtctl --context prod query 'fetch dt.entity.service | fields id | limit 1' --default-scan-limit-gbytes 1 -o json --plain
-
-dtctl config use-context nonprod --plain
+  --safety-level readonly
 ```
 
-Do not delete or overwrite legacy credentials unless that cleanup is explicitly intended. Updating the named `nonprod` and `prod` contexts to their dedicated token references is sufficient.
+For `prd`:
+
+```bash
+[[ -n "${DTCTL_PROD_ENVIRONMENT:-}" ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT is not set'; exit 1; }
+[[ "$DTCTL_PROD_ENVIRONMENT" == https://* ]] || { print -u2 'DTCTL_PROD_ENVIRONMENT must be an https URL'; exit 1; }
+
+dtctl auth login \
+  --context sandbox \
+  --environment "$DTCTL_PROD_ENVIRONMENT" \
+  --safety-level readonly
+```
+
+Production must always use `--safety-level readonly`. Do not substitute `readwrite-mine`, `readwrite-all`, or `dangerously-unrestricted`. Because both commands update the same context, running one replaces the `sandbox` context's selected environment; never use its prior tenant URL as proof of the current target.
+
+## Verify the selected environment
+
+Confirm the context URL, OAuth status, read-only safety level, and access to each telemetry type:
+
+```bash
+dtctl config describe-context sandbox --plain
+dtctl --context sandbox auth status --plain
+
+dtctl --context sandbox query \
+  'timeseries requests=sum(dt.service.request.count, scalar:true), from:-15m | fields requests | limit 1' \
+  --fetch-timeout-seconds 60 -o json --plain
+
+dtctl --context sandbox query \
+  'fetch spans, from:now()-15m | fields start_time, trace.id | sort start_time desc | limit 1' \
+  --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+
+dtctl --context sandbox query \
+  'fetch logs, from:now()-15m | fields timestamp, loglevel | sort timestamp desc | limit 1' \
+  --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+```
+
+The verification queries intentionally return only minimal, non-sensitive fields. A successful empty result still proves authorization; an authorization error does not. Do not print, export, or commit stored OAuth credentials.
