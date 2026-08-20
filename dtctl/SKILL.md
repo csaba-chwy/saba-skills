@@ -15,8 +15,8 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 - Pass `--context "$DT_CONTEXT"` on every `dtctl` command. Confirm the context URL and auth before querying.
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
-- Back every material conclusion with observed values, the exact context and DQL, and a direct Dynatrace link.
-- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw, multiline DQL query in the classic Logs and Events app with Advanced mode enabled; never route evidence through the Logs app, notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
+- Back every material conclusion with observed values, the exact context and DQL, and a direct Dynatrace link whose visualization matches the evidence shape.
+- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw, multiline DQL query in the classic Logs and Events app with Advanced mode enabled. Use line charts for metric trends and tables for discrete records; never route evidence through the Logs app, notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
 - Keep secrets, customer data, full log content, and sensitive captured headers out of URLs and summaries.
 
 ## Start safely
@@ -53,11 +53,14 @@ Treat each file under `services/` as a small set of service-specific overrides t
 ## Investigation workflow
 
 1. Resolve the target, context, absolute requested timeframe, and timezone interpretation once.
-2. Use `dt.service.request.count` to locate traffic, failures, regions, and the smallest useful incident window. Run independent metric timeline and catalog queries concurrently.
-3. Query the root span or other most selective source needed to identify a representative failed trace.
-4. **Immediately publish the trace-query link** using the rule below.
-5. Run trace topology, log correlation, and comparator/downstream-health work in parallel when those branches are independent.
-6. Synthesize only returned evidence, distinguish exact native correlation from pod/time support, and include linked proof beside every material claim.
+2. Choose the evidence shape from the request:
+   - For aggregate traffic, performance, throughput, latency, or error-rate prompts over a range such as the last day, query metric timelines and publish human-readable line-chart links. Keep series selective enough to read, normally one line per region, endpoint class, status, or percentile.
+   - For one RID, request ID, trace ID, or isolated request, query the exact bounded span and correlated log records and publish table links. Do not substitute a broad graph for the specific trace or log evidence.
+3. Use `dt.service.request.count` to locate traffic, failures, regions, and the smallest useful incident window. Run independent metric timeline and catalog queries concurrently.
+4. For broad metric reviews, generate each successful trend graph immediately and summarize totals, rates, peaks, percentiles, and time labels in plain language. Never make the user interpret raw timeseries arrays.
+5. For incidents, query the root span or other most selective source needed to identify a representative failed trace and **immediately publish the trace-query link** using the rule below.
+6. Run trace topology, log correlation, and comparator/downstream-health work in parallel when those branches are independent.
+7. Synthesize only returned evidence, distinguish exact native correlation from pod/time support, and include linked proof beside every material claim.
 
 Read [references/query-strategy.md](references/query-strategy.md) before constructing service, region, metric, or entity selectors.
 
@@ -113,7 +116,11 @@ Retain a proof bundle for every material claim:
 - direct tenant-correct Dynatrace link;
 - correlation strength and any permission, retention, sampling, or scan caveat.
 
-Generate Logs and Events Advanced-mode DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Format linked DQL with the data source on the first line and each pipeline command on its own subsequent line; never flatten a query into one long line for a URL. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
+Generate Logs and Events Advanced-mode DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Use `scripts/build_logs_events_graph_link.py` for chartable `timeseries` DQL and `scripts/build_logs_events_link.py` for tables. Format linked DQL with the data source on the first line and each pipeline command on its own subsequent line; never flatten a query into one long line for a URL. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
+
+Keep graph DQL graph-shaped: retain `timeframe`, `interval`, the small set of grouping dimensions, and the metric arrays. Do not replace the series with `scalar:true`, `arraySum`, or `arrayMax`; use a separate scalar query when exact totals or rankings are needed. Prefer separate readable graphs when request volume and latency/error-rate scales would obscure each other.
+
+In the final answer, lead with human-readable findings and localize timestamps to the user's timezone while retaining the absolute UTC window. For broad reviews, include graph links beside the trend claims and use compact tables for endpoint or status totals. For a single RID, lead with the request outcome and the exact trace/log links.
 
 Place descriptive links beside supported claims and include a compact final evidence table. Read [references/evidence-links.md](references/evidence-links.md) when generating log, metric, or selective-query links and before writing the final answer.
 
