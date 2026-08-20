@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Dynatrace Logs and Events Advanced-mode summarized bar-chart URL."""
+"""Build a Dynatrace Logs and Events time-series bar-chart URL."""
 
 from __future__ import annotations
 
@@ -29,10 +29,12 @@ def build_graph_link(environment_url: str, dql: str) -> str:
     normalized_dql = normalize_dql(dql)
     if not normalized_dql.lstrip().startswith("timeseries"):
         raise ValueError("graph DQL must start with a timeseries command")
-    if re.search(r"(?im)^\s*\|\s*summarize\b", normalized_dql) is None:
-        raise ValueError(
-            "graph DQL must summarize timeseries arrays into scalar rows"
-        )
+    if re.search(r"(?i)\binterval\s*:", normalized_dql) is None:
+        raise ValueError("graph DQL must declare an explicit timeseries interval")
+    if re.search(r"(?i)\bscalar\s*:\s*true\b", normalized_dql) is not None:
+        raise ValueError("graph DQL must preserve native timeseries arrays")
+    if re.search(r"(?i)\|\s*summarize\b", normalized_dql) is not None:
+        raise ValueError("graph DQL must preserve time buckets, not summarize them")
 
     encoded_dql = quote(normalized_dql, safe="")
     fragment = base64.b64encode(encoded_dql.encode("utf-8")).decode("ascii")
@@ -46,8 +48,8 @@ def build_graph_link(environment_url: str, dql: str) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a Dynatrace Logs and Events bar-chart link for exact "
-            "summarized metric DQL."
+            "Build a Dynatrace Logs and Events time-series bar-chart link "
+            "for exact metric DQL."
         )
     )
     parser.add_argument("--environment-url", required=True)

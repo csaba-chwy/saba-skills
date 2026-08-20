@@ -49,13 +49,13 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
 
-For a broad traffic or performance review, summarize metric arrays into scalar rows that Logs and Events Classic can render as a bar chart. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt:
+For a broad traffic or performance review, preserve metric arrays so Logs and Events Classic can render a time-series bar chart with time on the x-axis. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt, and select an explicit interval appropriate to the requested window:
 
 ```bash
-dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true | summarize requests=sum(arraySum(requests)), by:{service.name, failed} | sort service.name asc, failed asc' --fetch-timeout-seconds 60 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true | sort service.name asc, failed asc' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-Generate this successful summary with `scripts/src/build_logs_events_graph_link.py`. For performance prompts, use `scalar:true` latency percentiles followed by `summarize`; for error-rate prompts, group request totals by the confirmed `failed` dimension. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
+Generate this successful timeline with `scripts/src/build_logs_events_graph_link.py`. For performance prompts, return time-bucketed latency percentile arrays at an explicit interval; for error-rate prompts, group request timelines by the confirmed `failed` dimension. Compute headline totals and rates from the returned arrays for prose without adding scalar reductions to the linked graph DQL. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
 
 For incident discovery, run the selective failure timeline and metric-catalog discovery concurrently after context/auth succeeds:
 

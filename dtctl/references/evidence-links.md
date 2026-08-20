@@ -6,15 +6,15 @@ Use this reference for browser-free metric graphs, record tables, trace-query li
 
 An investigation is complete only when material conclusions have both observed `dtctl` results and direct Dynatrace links another authenticated user can open. A trace ID, timestamp, entity ID, pod name, copied DQL, or tenant home page is context, not a substitute for a direct evidence link.
 
-Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical classic Logs and Events Advanced-mode route documented below; never guess a hostname, reuse another context's link, or cross the production boundary. Select a summarized bar chart for aggregate metrics and a table for discrete records.
+Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical classic Logs and Events Advanced-mode route documented below; never guess a hostname, reuse another context's link, or cross the production boundary. Select a time-series bar chart with time on the x-axis for metric graphs and a table for discrete records or categorical scalar summaries.
 
 ## Choose a human-readable visualization
 
-- Use a **bar chart** for aggregate prompts about traffic, request volume, performance, latency, or failures over a bounded range. Logs and Events Classic does not support a line-chart visualization for native `timeseries` arrays; an unsupported `visualizationType=lineChart` silently falls back to a table.
+- Use a **time-series bar chart** for metric prompts about traffic, request volume, performance, latency, or failures over a bounded range. Preserve the native `timeframe`, `interval`, and numeric arrays so time is always the x-axis. Logs and Events Classic does not support a line-chart visualization for these links; an unsupported `visualizationType=lineChart` silently falls back to a table.
 - Use a **table** for one RID, request ID, or trace ID; bounded logs or spans; exact record inspection; scalar rankings; and categorical totals.
 - Give broad reviews a small number of readable series. Prefer region, a few important endpoints, status class, or latency percentiles over dozens of endpoint/status combinations.
-- Collapse metric arrays with `arraySum`, `arrayAvg`, or an appropriate scalar aggregation, then use `summarize` to retain only numeric scalar values and a small set of categorical dimensions.
-- Never make users decode JSON arrays. State totals, rates, and percentiles in prose, then link the summarized graph as supporting evidence.
+- Never use `scalar:true`, `summarize`, or array-reduction functions to prepare graph DQL. They remove the time dimension and produce a categorical result that belongs in prose or a table link.
+- Never make users decode JSON arrays. Calculate totals, rates, and percentile summaries from the returned arrays for prose, then link the unchanged time-series query as supporting evidence.
 
 ## Generate links without a browser
 
@@ -44,7 +44,7 @@ Run the helper from the `dtctl` skill directory. It URI-encodes the DQL, Base64-
 TENANT-ENVIRONMENT-URL/ui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-2h&gf=all&sortDirection=desc&visibleColumns=timestamp&visibleColumns=status&visibleColumns=content&advancedQueryMode=true&visualizationType=table&isDefaultQuery=true#BASE64-OF-URI-ENCODED-DQL
 ```
 
-The graph helper uses the same path with `visualizationType=barChart` and omits table-only visible-column parameters. It rejects a `timeseries` query without a `summarize` pipeline because native metric arrays fall back to an unreadable table. Both fragments are client-side app state: they open a one-time advanced query and do not create, update, or target a notebook or other saved Dynatrace resource. Keep the absolute `from` and `to` in the DQL itself; the route's `gtf=-2h` only initializes the app and must not replace the bounded query timeframe.
+The graph helper uses the same path with `visualizationType=barChart` and omits table-only visible-column parameters. It requires a native `timeseries` query with an explicit interval and rejects `scalar:true` or `summarize` so every graph keeps time on the x-axis. Both fragments are client-side app state: they open a one-time advanced query and do not create, update, or target a notebook or other saved Dynatrace resource. Keep the absolute `from` and `to` in the DQL itself; the route's `gtf=-2h` only initializes the app and must not replace the bounded query timeframe.
 
 ## Format linked DQL for the editor
 
@@ -58,11 +58,10 @@ fetch logs, from:"2026-01-01T12:00:00Z", to:"2026-01-01T12:05:00Z"
 | limit 20
 ```
 
-For a regional traffic graph, collapse each returned series into a scalar category:
+For a regional traffic graph, preserve the returned time buckets:
 
 ```dql
 timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[prd]") and endsWith(service.name, "]agentic-commerce-orchestrator")}, from:"2026-08-19T20:33:13Z", to:"2026-08-20T20:33:13Z", nonempty:true
-| summarize requests=sum(arraySum(requests)), by:{service.name, failed}
 | sort service.name asc, failed asc
 ```
 
@@ -70,7 +69,7 @@ Do not add comments, scan-limit settings, secrets, full log content, or explanat
 
 Create DQL files in private temporary storage outside the user's repository and delete them after URL generation. Generate each evidence link when its source query succeeds; do not wait for the final reporting phase. Generate independent links concurrently.
 
-- **Metric summaries:** link the exact bounded metric DQL, scalar `summarize`, and grouping dimensions with the graph helper.
+- **Metric timelines:** link the exact bounded metric DQL, explicit interval, native arrays, and grouping dimensions with the graph helper.
 - **Metric tables or rankings:** use the table helper when the result is too detailed or categorical for a readable bar chart.
 - **Traces:** link a bounded `fetch spans` query. For one known trace ID, filter with `trace.id == toUid("TRACE-ID")`; never substitute the distributed-trace intent.
 - **Logs:** link a bounded `fetch logs` query, including for a single record; never substitute the single-log-entry intent.
@@ -80,7 +79,8 @@ Create DQL files in private temporary storage outside the user's repository and 
 
 - Confirm the URL hostname equals the environment URL for `DT_CONTEXT`.
 - Confirm the path is exactly `/ui/apps/dynatrace.classic.logs.events/ui/logs-events`.
-- Confirm `advancedQueryMode=true` and the expected visualization: `visualizationType=barChart` for summarized graphs or `visualizationType=table` with the expected visible columns for tables.
+- Confirm `advancedQueryMode=true` and the expected visualization: `visualizationType=barChart` for time-series graphs or `visualizationType=table` with the expected visible columns for tables.
+- Decode the graph DQL and confirm it retains an explicit interval, native metric arrays, and the bounded timeframe, with no `scalar:true` or `summarize` stage.
 - Base64-decode the fragment, URI-decode the result, and compare the exact multiline DQL, absolute timeframe, and any trace ID or record selector.
 - Reject the link if its path contains `/ui/intent/`, `dynatrace.logs`, `dynatrace.notebooks`, `dynatrace.distributedtracing`, or `view-log-entry`.
 - Retain observed query values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
