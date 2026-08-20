@@ -6,56 +6,63 @@ Use this reference for browser-free log, metric, trace-query, and final-report l
 
 An investigation is complete only when material conclusions have both observed `dtctl` results and direct Dynatrace links another authenticated user can open. A trace ID, timestamp, entity ID, pod name, copied DQL, or tenant home page is context, not a substitute for a direct evidence link.
 
-Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical Logs & Events route documented below; never guess a hostname, reuse another context's link, or cross the production boundary.
+Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical classic Logs and Events Advanced-mode route documented below; never guess a hostname, reuse another context's link, or cross the production boundary.
 
 ## Generate links without a browser
 
-Every evidence link must open the exact raw DQL in Logs & Events. Do not use `dtctl open intent` for evidence links: notebook query intents can offer to add content to an existing notebook, while trace and log-entry intents produce inconsistent destinations. Do not provide notebook, dashboard, distributed-trace, or single-log-entry links as fallbacks.
+Every evidence link must open the exact raw DQL in the classic Logs and Events app with Advanced mode enabled. Do not use the `dynatrace.logs` app or `dtctl open intent` for evidence links: notebook query intents can offer to add content to an existing notebook, while trace and log-entry intents produce inconsistent destinations. Do not provide Logs-app, notebook, dashboard, distributed-trace, or single-log-entry links as fallbacks.
 
 ```bash
 # DT_ENV_URL is the exact environment URL returned by describe-context.
-# PAYLOAD_FILE is a private temporary JSON file using the shape below.
-COMPACT_PAYLOAD=$(jq -c . "$PAYLOAD_FILE")
-ENCODED_PAYLOAD=$(jq -rn --arg payload "$COMPACT_PAYLOAD" '$payload | @uri')
-printf '%s/ui/apps/dynatrace.logs/#%s\n' "${DT_ENV_URL%/}" "$ENCODED_PAYLOAD"
+# DQL_FILE is a private temporary text file containing formatted DQL.
+python3 scripts/build_logs_events_link.py \
+  --environment-url "$DT_ENV_URL" \
+  --dql-file "$DQL_FILE"
 ```
 
-Use this query payload shape:
+Run the helper from the `dtctl` skill directory. It URI-encodes the DQL, Base64-encodes that value, and emits this route:
 
-```json
-{
-  "version": 2,
-  "dt.query": "EXACT-DQL-WITH-ABSOLUTE-FROM-AND-TO",
-  "dt.timeframe": {
-    "from": "2026-01-01T12:00:00Z",
-    "to": "2026-01-01T12:05:00Z"
-  },
-  "showDqlEditor": true
-}
+```text
+TENANT-ENVIRONMENT-URL/ui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-2h&gf=all&sortDirection=desc&visibleColumns=timestamp&visibleColumns=status&visibleColumns=content&advancedQueryMode=true&visualizationType=table&isDefaultQuery=true#BASE64-OF-URI-ENCODED-DQL
 ```
 
-The resulting URL must have the form `TENANT-ENVIRONMENT-URL/ui/apps/dynatrace.logs/#PERCENT-ENCODED-JSON`. The fragment is client-side app state: it opens a one-time query view and does not create, update, or target a notebook or other saved Dynatrace resource.
+The fragment is client-side app state: it opens a one-time advanced query and does not create, update, or target a notebook or other saved Dynatrace resource. Keep the absolute `from` and `to` in the DQL itself; the route's `gtf=-2h` only initializes the app and must not replace the bounded query timeframe.
 
-Create payloads in private temporary storage outside the user's repository and delete them after URL generation. Generate each evidence link when its source query succeeds; do not wait for the final reporting phase. Generate independent links concurrently.
+## Format linked DQL for the editor
 
-- **Metrics:** link the exact metric DQL, dimensions, and absolute timeframe in Logs & Events.
+Write the data-source command on the first line and every pipeline command on its own subsequent line. Preserve these newlines in the encoded fragment even if the equivalent `dtctl query` shell command was written on one line.
+
+```dql
+fetch logs, from:"2026-01-01T12:00:00Z", to:"2026-01-01T12:05:00Z"
+| filter log.source == "checkout-b" and env == "stg"
+| fields timestamp, loglevel, trace_id, span_id, k8s.pod.name
+| sort timestamp asc
+| limit 20
+```
+
+Do not add comments, scan-limit settings, secrets, full log content, or explanatory text to the linked DQL. The URL should reproduce only the safe, bounded query that supports the claim.
+
+Create DQL files in private temporary storage outside the user's repository and delete them after URL generation. Generate each evidence link when its source query succeeds; do not wait for the final reporting phase. Generate independent links concurrently.
+
+- **Metrics:** link the exact metric DQL, dimensions, and absolute timeframe in Logs and Events Advanced mode.
 - **Traces:** link a bounded `fetch spans` query. For one known trace ID, filter with `trace.id == toUid("TRACE-ID")`; never substitute the distributed-trace intent.
 - **Logs:** link a bounded `fetch logs` query, including for a single record; never substitute the single-log-entry intent.
-- **Other Grail records:** link the exact bounded DQL in the same Logs & Events view.
+- **Other Grail records:** link the exact bounded DQL in the same Logs and Events Advanced-mode view.
 
 ## Validate without opening
 
 - Confirm the URL hostname equals the environment URL for `DT_CONTEXT`.
-- Confirm the path is exactly `/ui/apps/dynatrace.logs/` and the query payload is in the URL fragment.
-- Decode the fragment locally and compare the exact DQL, absolute timeframe, and any trace ID or record selector.
-- Reject the link if its path contains `/ui/intent/`, `dynatrace.notebooks`, `dynatrace.distributedtracing`, or `view-log-entry`.
+- Confirm the path is exactly `/ui/apps/dynatrace.classic.logs.events/ui/logs-events`.
+- Confirm `advancedQueryMode=true`, `visualizationType=table`, and the expected visible columns are present.
+- Base64-decode the fragment, URI-decode the result, and compare the exact multiline DQL, absolute timeframe, and any trace ID or record selector.
+- Reject the link if its path contains `/ui/intent/`, `dynatrace.logs`, `dynatrace.notebooks`, `dynatrace.distributedtracing`, or `view-log-entry`.
 - Retain observed query values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
 
 Do not invoke a browser on the normal path. Open a link only when the user explicitly requests UI validation or reports that it is broken.
 
 Do not place secrets, captured headers, customer data, full log content, or sensitive selectors in a URL. Prefer technical identifiers and selective telemetry fields. If the only selector is sensitive, omit it and explain the evidence limitation.
 
-If Logs & Events is unavailable or the query is too sensitive to place in a URL, label the finding **unlinked interim evidence** instead of falling back to a notebook or another app. If trace access is denied, link the log or metric queries those sources support and state that trace evidence was unavailable.
+If Logs and Events is unavailable or the query is too sensitive to place in a URL, label the finding **unlinked interim evidence** instead of falling back to the Logs app, a notebook, or another app. If trace access is denied, link the log or metric queries those sources support and state that trace evidence was unavailable.
 
 ## Cite evidence
 
