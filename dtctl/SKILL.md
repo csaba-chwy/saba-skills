@@ -10,8 +10,8 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 ## Non-negotiable contract
 
 - Select the `prod` context with `DTCTL_PROD_ENVIRONMENT` only for `[prd]`; select the `nonprod` context with `DTCTL_NONPROD_ENVIRONMENT` for `[stg]`, `[qat]`, and `[dev]`. If the environment is not explicit, ask. Never cross the production boundary as a fallback.
-- Authenticate the selected environment with browser-based OAuth into its matching `prod` or `nonprod` context. Do not use any other context name, platform-token environment variables, or `dtctl config set-credentials`.
-- Always create or refresh both contexts with `--safety-level readonly`. This is mandatory for production and must not be relaxed for nonproduction.
+- Reuse a valid browser-based OAuth session in the matching `prod` or `nonprod` context. Run `dtctl auth login` only when the context is missing, its environment or safety level is wrong, or `dtctl auth status` proves that no usable OAuth session remains. An expired access token with a refresh token is still usable because `dtctl` refreshes it automatically. Do not use any other context name, platform-token environment variables, or `dtctl config set-credentials`.
+- Whenever creating, repairing, or re-authenticating a context, pass `--safety-level readonly`. This is mandatory for production and must not be relaxed for nonproduction.
 - Pass `--context "$DT_CONTEXT"` on every `dtctl` command. Confirm the context URL and auth before querying.
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
@@ -30,6 +30,15 @@ case "$SERVICE_NAME" in
   *) print -u2 'Cannot determine Dynatrace context from service name'; exit 1 ;;
 esac
 [[ "$DT_ENVIRONMENT" == https://* ]] || { print -u2 'Selected Dynatrace environment is not configured as an https URL'; exit 1; }
+dtctl config describe-context "$DT_CONTEXT" --plain
+dtctl --context "$DT_CONTEXT" auth status --plain
+```
+
+Reuse the existing context without logging in only after confirming that `describe-context` reports the exact `DT_ENVIRONMENT` and `readonly` safety level, and that `auth status` reports browser-based OAuth with either an unexpired access token or a refresh token. If all of those checks pass, do not run `dtctl auth login`.
+
+Only when the context is absent or mismatched, or its OAuth session has neither a usable access token nor a refresh token, create, repair, or re-authenticate it:
+
+```bash
 dtctl auth login \
   --context "$DT_CONTEXT" \
   --environment "$DT_ENVIRONMENT" \
@@ -38,7 +47,7 @@ dtctl config describe-context "$DT_CONTEXT" --plain
 dtctl --context "$DT_CONTEXT" auth status --plain
 ```
 
-Confirm that the environment reported by `describe-context` exactly matches `DT_ENVIRONMENT` before querying. Never bind the `prod` context to the nonproduction URL or the `nonprod` context to the production URL. If OAuth or a keychain-backed credential is unavailable only inside the restricted execution environment, retry the same command once with normal browser and Keychain access rather than changing tools or authentication. Once that retry proves the context uses macOS Keychain credentials, run every later `dtctl` command with normal Keychain access on its first attempt. Do not incur a restricted-environment failure and approval wait for every query.
+Confirm the repaired context again before querying. Never bind the `prod` context to the nonproduction URL or the `nonprod` context to the production URL. If OAuth or a keychain-backed credential is unavailable only inside the restricted execution environment, retry the failed preflight command once with normal browser and Keychain access before deciding that login is necessary. Once that retry proves the context uses macOS Keychain credentials, run every later `dtctl` command with normal Keychain access on its first attempt. Do not incur a restricted-environment failure and approval wait for every query.
 
 ## Apply the shared service baseline
 
