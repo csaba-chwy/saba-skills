@@ -7,7 +7,10 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from build_service_rundown_query import build_rundown_query
+from build_service_rundown_query import (
+    build_rundown_query,
+    build_scalar_rundown_query,
+)
 from build_logs_events_graph_link import build_graph_link
 
 
@@ -119,6 +122,23 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         )
 
         self.assertIn("visualizationType=barChart", result)
+
+    def test_builds_scalar_rundown_for_table_output(self) -> None:
+        result = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+        )
+
+        self.assertIn(
+            "requests = sum(dt.service.request.count, scalar: true)", result
+        )
+        self.assertIn("default: 0, scalar: true", result)
+        self.assertIn("latency_p95_ms = latency_p95_us / 1000.0", result)
+        self.assertIn(
+            "fields requests, failed_requests, error_rate, latency_p95_ms", result
+        )
 
 
 if __name__ == "__main__":

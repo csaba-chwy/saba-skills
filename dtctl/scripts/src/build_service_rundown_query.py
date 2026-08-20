@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the standard metric timeline DQL for a service rundown."""
+"""Build standard metric DQL for service rundowns."""
 
 from __future__ import annotations
 
@@ -94,6 +94,51 @@ def build_rundown_query(
             f"{latency_ms_field} = {percentile_field}[] / 1000.0",
             f"| fields timeframe, interval{dimension_fields}, requests, error_rate, "
             f"{latency_ms_field}",
+        )
+    )
+
+
+def build_scalar_rundown_query(
+    *,
+    environment: str,
+    service: str,
+    start: str,
+    end: str,
+    latency_percentile: int = 95,
+) -> str:
+    """Return one scalar DQL query for a concise service rundown."""
+    if environment not in ENVIRONMENTS:
+        raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
+    if not SERVICE_RE.fullmatch(service):
+        raise ValueError("service must be an untagged telemetry stem")
+    parsed_start = _parse_absolute_timestamp(start, "start")
+    parsed_end = _parse_absolute_timestamp(end, "end")
+    if parsed_end <= parsed_start:
+        raise ValueError("end must be later than start")
+    if not 1 <= latency_percentile <= 99:
+        raise ValueError("latency percentile must be between 1 and 99")
+
+    service_filter = (
+        f'startsWith(service.name, "[{environment}]") and '
+        f'endsWith(service.name, "]{service}")'
+    )
+    percentile_field = f"latency_p{latency_percentile}_us"
+    latency_ms_field = f"latency_p{latency_percentile}_ms"
+
+    return "\n".join(
+        (
+            "timeseries {",
+            "  requests = sum(dt.service.request.count, scalar: true),",
+            "  failed_requests = sum(dt.service.request.count, "
+            "filter: { failed == true }, default: 0, scalar: true),",
+            f"  {percentile_field} = percentile("
+            f"dt.service.request.response_time, {latency_percentile}, scalar: true)",
+            f"}}, filter: {{ {service_filter} }}, "
+            f'from: "{start}", to: "{end}", nonempty: true',
+            "| fieldsAdd error_rate = if(requests > 0, "
+            "100.0 * failed_requests / requests, else: 0.0), "
+            f"{latency_ms_field} = {percentile_field} / 1000.0",
+            f"| fields requests, failed_requests, error_rate, {latency_ms_field}",
         )
     )
 
