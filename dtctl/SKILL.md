@@ -16,7 +16,7 @@ Use this skill for read-only Grail investigations. Never mutate Dynatrace resour
 - Use the context environment URL as the only tenant source. Never guess or reuse a hostname from another context.
 - Start with request metrics, then narrow raw logs or spans to a selective target and a metric-selected or explicitly bounded window.
 - Back every material conclusion with observed values, the exact context and DQL, and a direct Dynatrace link whose visualization matches the evidence shape.
-- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw, multiline DQL query in the classic Logs and Events app with Advanced mode enabled. Use line charts for metric trends and tables for discrete records; never route evidence through the Logs app, notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
+- Do not use Chrome or another browser on the normal path. Provide every evidence link as a raw, multiline DQL query in the classic Logs and Events app with Advanced mode enabled. Use summarized bar charts for aggregate metrics and tables for discrete records; never route evidence through the Logs app, notebooks, dashboards, the distributed-trace view, or the single-log-entry view.
 - Keep secrets, customer data, full log content, and sensitive captured headers out of URLs and summaries.
 
 ## Start safely
@@ -54,8 +54,8 @@ Treat each file under `services/` as a small set of service-specific overrides t
 
 Treat prompts such as “quick rundown,” “rundown,” “quick health check,” “at a glance,” or “how has this service looked?” as summary requests unless the user explicitly asks for debugging, root cause, an incident investigation, exact records, logs, or traces. This fast path takes precedence over the broader workflow below.
 
-1. Resolve and authenticate the target safely, then run no more than two simple metric queries. Start with one `dt.service.request.count` timeline grouped only by a small useful dimension such as regional `service.name` or `failed`. Optionally use the second query for a basic latency or error trend when it materially improves the summary.
-2. Prefer trends and a readable line-chart link over exhaustive exact totals, endpoint rankings, catalog discovery, custom service metrics, or multiple scalar companion queries. Report a simple total or peak only when it is directly available without extra drilldown; do not chase bucket-edge precision for a quick summary.
+1. Resolve and authenticate the target safely, then run no more than two simple metric queries. Start with one `dt.service.request.count` query grouped only by a small useful dimension such as regional `service.name` or `failed`, and end it with `summarize` so the linked result contains scalar rows. Optionally use the second query for a basic latency or error comparison when it materially improves the summary.
+2. Prefer a readable summarized bar-chart link over exhaustive endpoint rankings, catalog discovery, custom service metrics, or multiple companion queries. Report simple totals or comparisons directly returned by the summarized query; do not chase bucket-edge precision for a quick summary.
 3. Do not query raw logs or spans, resolve entity IDs, start trace correlation, or use subagents on the fast path. If the metrics show failures, latency degradation, or another concern, state it plainly but stop before root-cause work.
 4. Return a compact answer with the timeframe, two or three headline observations, and at most two evidence links. Do not add a proof table unless it is necessary to prevent ambiguity.
 5. End with one focused question offering a deeper follow-up, for example: “Want me to drill into the latency, failures, or one region?” Do not continue the investigation until the user chooses a direction.
@@ -64,10 +64,10 @@ Treat prompts such as “quick rundown,” “rundown,” “quick health check,
 
 1. Resolve the target, context, absolute requested timeframe, and timezone interpretation once.
 2. Choose the evidence shape from the request:
-   - For aggregate traffic, performance, throughput, latency, or error-rate prompts over a range such as the last day, query metric timelines and publish human-readable line-chart links. Keep series selective enough to read, normally one line per region, endpoint class, status, or percentile.
+   - For aggregate traffic, performance, throughput, latency, or error-rate prompts over a range such as the last day, query bounded metrics, summarize their arrays into scalar rows, and publish human-readable bar-chart links. Keep categories selective enough to read, normally one bar per region, endpoint class, failure state, or percentile.
    - For one RID, request ID, trace ID, or isolated request, query the exact bounded span and correlated log records and publish table links. Do not substitute a broad graph for the specific trace or log evidence.
 3. For standard or deep investigations, use `dt.service.request.count` to locate traffic, failures, regions, and the smallest useful incident window. Run independent metric timeline and catalog queries concurrently.
-4. For broad metric reviews, generate each successful trend graph immediately and summarize totals, rates, peaks, percentiles, and time labels in plain language. Never make the user interpret raw timeseries arrays.
+4. For broad metric reviews, generate each successful summarized graph immediately and explain totals, rates, and percentiles in plain language. Never send native timeseries arrays to a visualization that renders them as a table.
 5. For incidents, query the root span or other most selective source needed to identify a representative failed trace and **immediately publish the trace-query link** using the rule below.
 6. Run trace topology, log correlation, and comparator/downstream-health work in parallel when those branches are independent.
 7. Synthesize only returned evidence, distinguish exact native correlation from pod/time support, and include linked proof beside every material claim.
@@ -126,9 +126,9 @@ Retain a proof bundle for every material claim:
 - direct tenant-correct Dynatrace link;
 - correlation strength and any permission, retention, sampling, or scan caveat.
 
-Generate Logs and Events Advanced-mode DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Use `scripts/src/build_logs_events_graph_link.py` for chartable `timeseries` DQL and `scripts/src/build_logs_events_link.py` for tables. Format linked DQL with the data source on the first line and each pipeline command on its own subsequent line; never flatten a query into one long line for a URL. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
+Generate Logs and Events Advanced-mode DQL evidence links as soon as their supporting query succeeds instead of batching them at the end. Use `scripts/src/build_logs_events_graph_link.py` only for `timeseries` DQL that ends in a scalar `summarize`, and use `scripts/src/build_logs_events_link.py` for tables. Format linked DQL with the data source on the first line and each pipeline command on its own subsequent line; never flatten a query into one long line for a URL. Generate independent remaining links concurrently. Do not rerun successful DQL solely because a link was generated from it. Use private temporary storage outside the service repository and clean it up.
 
-Keep graph DQL graph-shaped: retain `timeframe`, `interval`, the small set of grouping dimensions, and the metric arrays. Do not replace the series with `scalar:true`, `arraySum`, or `arrayMax`; use a separate scalar query when exact totals or rankings are needed. Prefer separate readable graphs when request volume and latency/error-rate scales would obscure each other.
+Keep graph DQL compatible with Logs and Events Classic: collapse each metric array with an explicit function such as `arraySum`, then use `summarize` to return numeric scalar fields and a small set of grouping dimensions. Native `timeseries` arrays render as an unreadable table because this app does not support a line-chart visualization. Prefer separate readable graphs when request volume and latency/error-rate scales would obscure each other.
 
 In the final answer, lead with human-readable findings and localize timestamps to the user's timezone while retaining the absolute UTC window. For standard broad reviews, include graph links beside the trend claims and use compact tables for endpoint or status totals. For quick rundowns, follow the fast-path answer limit and end with a focused follow-up question. For a single RID, lead with the request outcome and the exact trace/log links.
 
