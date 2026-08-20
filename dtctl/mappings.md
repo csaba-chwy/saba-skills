@@ -1,6 +1,6 @@
 # Known Dynatrace service mappings
 
-Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace context from the original environment tag: `[prd]` uses `prod`; `[stg]`, `[qat]`, and `[dev]` use `nonprod`. Use the telemetry stem with `log.source` plus `env` for logical log selection and as the suffix of tagged metric `service.name`; preserve the tags only when an exact workload, service name, or entity fallback is required.
+Remove the leading environment and region tags from the target before matching the logical service name. Select the Dynatrace environment URL from the original environment tag: `[prd]` uses `DTCTL_PROD_ENVIRONMENT`; `[stg]`, `[qat]`, and `[dev]` use `DTCTL_NONPROD_ENVIRONMENT`. Authenticate that URL into the read-only `sandbox` context before querying. Use the telemetry stem with `log.source` plus `env` for logical log selection and as the suffix of tagged metric `service.name`; preserve the tags only when an exact workload, service name, or entity fallback is required.
 
 The logical selector templates live in [references/query-strategy.md](references/query-strategy.md), and the shared service behavior lives in [SKILL.md](SKILL.md). Keep every linked service note environment-neutral: it may document a telemetry stem alias, log bucket, or service-specific enrichment behavior, but it must not pin an environment or restate the shared investigation baseline.
 
