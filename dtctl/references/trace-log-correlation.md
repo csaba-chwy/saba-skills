@@ -15,16 +15,28 @@ Reuse a confirmed native mapping within the investigation. Re-probe after deploy
 
 ```bash
 # Probe log-side IDs
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END"
+| filter k8s.pod.name == "SPAN-POD"
+| fields timestamp, trace_id, span_id, k8s.workload.name, k8s.pod.name
+| sort timestamp asc
+| limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
 # Exact trace spans
 dtctl --context "$DT_CONTEXT" query 'fetch spans, from:"WINDOW-START", to:"WINDOW-END" | filter trace.id == toUid("TRACE-ID") | fields start_time, trace.id, span.id, parent_span.id, span.name, duration, span.status_code, dt.entity.service | sort start_time asc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
 # Exact trace logs when native IDs exist
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END" | filter trace_id == "TRACE-ID" | fields timestamp, loglevel, trace_id, span_id, dt.entity.service, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"WINDOW-START", to:"WINDOW-END"
+| filter trace_id == "TRACE-ID"
+| fields timestamp, loglevel, trace_id, span_id, dt.entity.service, k8s.workload.name, k8s.pod.name
+| sort timestamp asc
+| limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
 # Pod/time fallback
-dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW" | filter k8s.pod.name == "SPAN-POD" | fields timestamp, loglevel, k8s.workload.name, k8s.pod.name | sort timestamp asc | limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'fetch logs, from:"SPAN-START-MINUS-SKEW", to:"SPAN-END-PLUS-SKEW"
+| filter k8s.pod.name == "SPAN-POD"
+| fields timestamp, loglevel, k8s.workload.name, k8s.pod.name
+| sort timestamp asc
+| limit 20' --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 ```
 
 Log `trace_id` is a string; span `trace.id` is a UID. Confirm a log value is 32 hexadecimal characters before using `toUid`. Shorter request or transaction identifiers are application-local correlation keys, not trace IDs.

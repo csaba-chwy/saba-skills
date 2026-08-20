@@ -63,8 +63,16 @@ class BuildLogsEventsGraphLinkTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "preserve time buckets"):
             build_graph_link(
                 "https://example.apps.dynatrace.com",
-                "timeseries requests=sum(dt.service.request.count), interval:15m "
+                "timeseries requests=sum(dt.service.request.count), interval:15m\n"
                 "| summarize requests=sum(arraySum(requests))",
+            )
+
+    def test_rejects_inline_graph_pipeline_commands(self) -> None:
+        with self.assertRaisesRegex(ValueError, "pipeline command on its own line"):
+            build_graph_link(
+                "https://example.apps.dynatrace.com",
+                "timeseries requests=sum(dt.service.request.count), interval:15m "
+                "| fields timeframe, requests",
             )
 
 

@@ -70,7 +70,10 @@ dtctl --context "$DT_CONTEXT" query \
   --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 
 dtctl --context "$DT_CONTEXT" query \
-  'fetch logs, from:now()-15m | fields timestamp, loglevel | sort timestamp desc | limit 1' \
+  'fetch logs, from:now()-15m
+| fields timestamp, loglevel
+| sort timestamp desc
+| limit 1' \
   --fetch-timeout-seconds 60 --default-scan-limit-gbytes 5 -o json --plain
 ```
 

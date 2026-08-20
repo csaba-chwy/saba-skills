@@ -1,39 +1,98 @@
 # Dynatrace evidence links
 
-Use this reference for browser-free metric graphs, record tables, trace-query links, and final-report links. The top-level skill contains the mandatory early trace-query rule.
+Use this reference to route each successful observation to the Dynatrace app that best explains it. The top-level skill contains the mandatory early exact-trace rule.
 
-For a general health or aggregate metric question, `scripts/src/run_service_rundown.py` generates and validates the scalar table link; return its output without rebuilding the link here.
+Dynatrace documents the [Distributed Tracing app](https://docs.dynatrace.com/docs/observe/application-observability/distributed-tracing/distributed-tracing-app) as the place for end-to-end trace waterfalls, spans, attributes, and correlated logs. It documents the [Synthetic app](https://docs.dynatrace.com/docs/observe/digital-experience/synthetic/synthetic-app) as the place to manage monitors and inspect reporting and executions. Synthetic discovery uses the monitor types in [Synthetic monitors in Smartscape](https://docs.dynatrace.com/docs/observe/digital-experience/synthetic/synthetic-smartscape).
 
-## Proof and link contract
+## Route by evidence type
 
-An investigation is complete only when material conclusions have both observed `dtctl` results and direct Dynatrace links another authenticated user can open. A trace ID, timestamp, entity ID, pod name, copied DQL, or tenant home page is context, not a substitute for a direct evidence link.
+| Evidence in the answer | Direct destination | Link method |
+| --- | --- | --- |
+| One known `trace.id` | Distributed Tracing single-trace waterfall | `dynatrace.distributedtracing/view-trace` |
+| A filtered set of requests or spans | Distributed Tracing explorer | `dynatrace.distributedtracing/view-traces` |
+| Synthetic monitor identity, configuration, or current health | Synthetic monitor details | `dynatrace.synthetic/view-synthetic-monitor` |
+| Synthetic failures, performance, or run history | Synthetic executions | `dynatrace.synthetic/view-synthetic-monitor-executions` |
+| Bounded logs | Logs and Events Advanced-mode table | `scripts/src/build_logs_events_link.py` |
+| Metric time trend requested by the user | Existing time-series bar chart with time on the x-axis | `scripts/src/build_logs_events_graph_link.py` |
+| Scalar metric summary, ranking, or other DQL records | Logs and Events Advanced-mode table | `scripts/src/build_logs_events_link.py` |
+| Another concrete Dynatrace resource | Its installed owning app | Discover with `dtctl get intents --app APP-ID` and verify with `dtctl describe intent APP-ID/INTENT-ID` |
 
-Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Append only the canonical classic Logs and Events Advanced-mode route documented below; never guess a hostname, reuse another context's link, or cross the production boundary. Select a time-series bar chart with time on the x-axis for metric graphs and a table for discrete records or categorical scalar summaries.
+Do not use a query app merely because DQL found the resource. Discovery and evidence presentation are separate: use DQL to find an exact trace or monitor, then link the trace or monitor in its owning app. If the answer cites different evidence types, provide separate links beside the claims they support.
 
-## Choose a human-readable Dynatrace evidence view
+## App-native links
 
-- Use a **time-series bar chart** for metric prompts about traffic, request volume, performance, latency, or failures over a bounded range. Preserve the native `timeframe`, `interval`, and numeric arrays so time is always the x-axis. Logs and Events Classic does not support a line-chart visualization for these links; an unsupported `visualizationType=lineChart` silently falls back to a table.
-- Use a **table** for one RID, request ID, or trace ID; bounded logs or spans; exact record inspection; scalar rankings; and categorical totals.
-- Give broad reviews a small number of readable series. Prefer region, a few important endpoints, status class, or latency percentiles over dozens of endpoint/status combinations.
-- Put measures with different units or materially different scales in separate graph links when the user explicitly requests multiple trends. General summaries use the runner's scalar table link instead.
-- Never use `scalar:true`, `summarize`, or array-reduction functions to prepare graph DQL. They remove the time dimension and produce a categorical result that belongs in prose or a table link.
-- Never make users decode JSON arrays or redraw them locally. Calculate totals, rates, and percentile summaries from the returned arrays for prose, then provide the corresponding Dynatrace time-series links as supporting evidence.
+Use the selected read-only context and `dtctl open intent` without `--browser`. It prints a tenant-correct AppShell URL and does not open the UI or change a Dynatrace resource.
 
-## Generate links without a browser
+### Exact trace
 
-Every evidence link must open the exact raw DQL in the classic Logs and Events app with Advanced mode enabled. Do not use the `dynatrace.logs` app or `dtctl open intent` for evidence links: notebook query intents can offer to add content to an existing notebook, while trace and log-entry intents produce inconsistent destinations. Do not provide Logs-app, notebook, dashboard, distributed-trace, or single-log-entry links as fallbacks.
+As soon as a valid trace ID is observed, create a private temporary JSON payload:
+
+```json
+{
+  "trace.id": "TRACE-ID",
+  "dt.timeframe": {
+    "from": "WINDOW-START",
+    "to": "WINDOW-END"
+  }
+}
+```
+
+```bash
+dtctl --context "$DT_CONTEXT" open intent \
+  dynatrace.distributedtracing/view-trace \
+  --data-file "$PAYLOAD_FILE" \
+  --plain
+```
+
+Use the returned Distributed Tracing link as the primary trace evidence. A bounded `fetch spans` query may still be used to inspect or tabulate spans, but its Logs and Events link is not a substitute for the single-trace waterfall.
+
+For a trace set, use `dynatrace.distributedtracing/view-traces` with the installed intent schema. Supply a selective `dt.filter` and bounded `dt.timeframe`; do not fall back to an arbitrary log-query page.
+
+### Synthetic monitor or executions
+
+After a Smartscape query returns an exact HTTP, browser, or network monitor ID, link the monitor itself:
+
+```json
+{
+  "monitorId": "MONITOR-ID",
+  "dt.timeframe": {
+    "from": "WINDOW-START",
+    "to": "WINDOW-END"
+  }
+}
+```
+
+```bash
+# Identity, configuration, status, or monitor-level finding
+dtctl --context "$DT_CONTEXT" open intent \
+  dynatrace.synthetic/view-synthetic-monitor \
+  --data-file "$PAYLOAD_FILE" \
+  --plain
+
+# A claim about run history, a failure, availability, or performance
+dtctl --context "$DT_CONTEXT" open intent \
+  dynatrace.synthetic/view-synthetic-monitor-executions \
+  --data-file "$PAYLOAD_FILE" \
+  --plain
+```
+
+Use the direct Synthetic link as primary evidence. Do not link the Smartscape discovery query as though it were the monitor page. If a tenant exposes only type-specific intents, inspect the installed schema and use `view_http_monitor`, `view_browser_monitor`, or `view_network_availability_monitor` with its required property.
+
+Delete every temporary payload after URL generation. Do not place customer data, captured headers, secrets, full log content, or sensitive selectors in an intent payload.
+
+## DQL table and graph links
+
+Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Never guess a hostname, reuse another context's URL, or cross the production boundary.
 
 For table evidence:
 
 ```bash
-# DT_ENV_URL is the exact environment URL returned by describe-context.
-# DQL_FILE is a private temporary text file containing formatted DQL.
 python3 scripts/src/build_logs_events_link.py \
   --environment-url "$DT_ENV_URL" \
   --dql-file "$DQL_FILE"
 ```
 
-For a metric graph:
+For a requested metric trend:
 
 ```bash
 python3 scripts/src/build_logs_events_graph_link.py \
@@ -41,17 +100,11 @@ python3 scripts/src/build_logs_events_graph_link.py \
   --dql-file "$DQL_FILE"
 ```
 
-Run the helper from the `dtctl` skill directory. It URI-encodes the DQL, Base64-encodes that value, and emits this route:
+The graph helper keeps `visualizationType=barChart`, requires a native `timeseries` query with an explicit interval, and rejects `scalar:true` and `summarize`. This preserves the time axis and prevents visualization regressions. Do not redraw telemetry locally.
 
-```text
-TENANT-ENVIRONMENT-URL/ui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-2h&gf=all&sortDirection=desc&visibleColumns=timestamp&visibleColumns=status&visibleColumns=content&advancedQueryMode=true&visualizationType=table&isDefaultQuery=true#BASE64-OF-URI-ENCODED-DQL
-```
+### Keep DQL readable
 
-The graph helper uses the same path with `visualizationType=barChart` and omits table-only visible-column parameters. It requires a native `timeseries` query with an explicit interval and rejects `scalar:true` or `summarize` so every graph keeps time on the x-axis. Both fragments are client-side app state: they open a one-time advanced query and do not create, update, or target a notebook or other saved Dynatrace resource. Keep the absolute `from` and `to` in the DQL itself; the route's `gtf=-2h` only initializes the app and must not replace the bounded query timeframe.
-
-## Format linked DQL for the editor
-
-Write the data-source command on the first line and every pipeline command on its own subsequent line. Preserve these newlines in the encoded fragment even if the equivalent `dtctl query` shell command was written on one line.
+Write the data-source command on the first line and every pipeline command on its own subsequent line. Preserve the newlines in executed commands, temporary files, and encoded links. The link builders reject inline pipeline chains.
 
 ```dql
 fetch logs, from:"2026-01-01T12:00:00Z", to:"2026-01-01T12:05:00Z"
@@ -61,55 +114,34 @@ fetch logs, from:"2026-01-01T12:00:00Z", to:"2026-01-01T12:05:00Z"
 | limit 20
 ```
 
-For a regional traffic graph, preserve the returned time buckets:
+For a metric trend, preserve returned arrays and dimensions:
 
 ```dql
 timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[prd]") and endsWith(service.name, "]agentic-commerce-orchestrator")}, from:"2026-08-19T20:33:13Z", to:"2026-08-20T20:33:13Z", nonempty:true
 | sort service.name asc, failed asc
 ```
 
-Do not add comments, scan-limit settings, secrets, full log content, or explanatory text to the linked DQL. The URL should reproduce only the safe, bounded query that supports the claim.
-
-Create DQL files in private temporary storage outside the user's repository and delete them after URL generation. Generate each evidence link when its source query succeeds; do not wait for the final reporting phase. Generate independent links concurrently.
-
-- **Metric timelines:** link the exact bounded metric DQL, explicit interval, native arrays, and grouping dimensions with the graph helper.
-- **Metric tables or rankings:** use the table helper when the result is too detailed or categorical for a readable bar chart.
-- **Traces:** link a bounded `fetch spans` query. For one known trace ID, filter with `trace.id == toUid("TRACE-ID")`; never substitute the distributed-trace intent.
-- **Logs:** link a bounded `fetch logs` query, including for a single record; never substitute the single-log-entry intent.
-- **Other Grail records:** link the exact bounded DQL in the same Logs and Events Advanced-mode view.
+Do not add comments, scan-limit settings, secrets, full log content, or explanatory prose to linked DQL. Keep absolute `from` and `to` values in the query. Create DQL files in private temporary storage outside the repository and delete them after URL generation.
 
 ## Validate without opening
 
-- Confirm the URL hostname equals the environment URL for `DT_CONTEXT`.
-- Confirm the path is exactly `/ui/apps/dynatrace.classic.logs.events/ui/logs-events`.
-- Confirm `advancedQueryMode=true` and the expected visualization: `visualizationType=barChart` for time-series graphs or `visualizationType=table` with the expected visible columns for tables.
-- Decode the graph DQL and confirm it retains an explicit interval, native metric arrays, and the bounded timeframe, with no `scalar:true` or `summarize` stage.
-- Base64-decode the fragment, URI-decode the result, and compare the exact multiline DQL, absolute timeframe, and any trace ID or record selector.
-- Reject the link if its path contains `/ui/intent/`, `dynatrace.logs`, `dynatrace.notebooks`, `dynatrace.distributedtracing`, or `view-log-entry`.
-- Retain observed query values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
+- Confirm every hostname matches the environment URL for `DT_CONTEXT`.
+- For an exact trace, confirm the path contains `/ui/intent/dynatrace.distributedtracing/view-trace` and the decoded fragment contains the exact `trace.id` and bounded timeframe.
+- For Synthetic, confirm the path contains the chosen `/ui/intent/dynatrace.synthetic/` intent and the decoded fragment contains the exact monitor ID and bounded timeframe.
+- For a DQL table or graph, confirm the path is `/ui/apps/dynatrace.classic.logs.events/ui/logs-events`, decode and compare the exact multiline DQL, and confirm `visualizationType=table` or `barChart` as intended.
+- For a graph, also confirm an explicit interval, native arrays, and no `scalar:true` or `summarize` stage.
+- Retain observed values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
 
-Do not invoke a browser on the normal path. Open a link only when the user explicitly requests UI validation or reports that it is broken.
-
-Do not invoke client-side visualization or image-generation capabilities, create HTML or image assets, render telemetry, or inspect screenshots. Validate evidence links by decoding their URL state and comparing the exact DQL instead.
-
-Do not place secrets, captured headers, customer data, full log content, or sensitive selectors in a URL. Prefer technical identifiers and selective telemetry fields. If the only selector is sensitive, omit it and explain the evidence limitation.
-
-If Logs and Events is unavailable or the query is too sensitive to place in a URL, label the finding **unlinked interim evidence** instead of falling back to the Logs app, a notebook, or another app. If trace access is denied, link the log or metric queries those sources support and state that trace evidence was unavailable.
+Do not invoke a browser on the normal path. Open a link only when the user explicitly requests UI validation or reports that it is broken. If the owning app or intent is unavailable, label the result **unlinked interim evidence** and link any independent log or metric claims in their appropriate views; do not mislabel a query-page link as the missing resource.
 
 ## Cite evidence
 
-Place descriptive Markdown links immediately beside supported claims. Preserve the exact failed-trace query link already sent in commentary.
+Place descriptive Markdown links immediately beside supported claims:
 
 ```markdown
-The failed request was isolated to use1 [failure-rate graph and regional comparison](DIRECT-METRIC-GRAPH-LINK).
-Checkout-B returned HTTP 500 [failed trace query](DIRECT-TRACE-QUERY-LINK), and its pod logged a
-connection refusal to Cart-B [supporting logs](DIRECT-LOG-LINK).
-
-| Source | Observed proof | Dynatrace |
-|---|---|---|
-| Metrics | One failed GET in use1, 03:19–03:20 UTC | [Failure-rate graph](DIRECT-METRIC-GRAPH-LINK) |
-| Trace | Trace ID, HTTP 500, 333 ms | [Failed request spans](DIRECT-TRACE-QUERY-LINK) |
-| Logs | Connection refused at 03:19:50 UTC | [Supporting logs](DIRECT-LOG-LINK) |
+Checkout-B returned HTTP 500 [failed trace waterfall](DIRECT-TRACE-LINK), and its pod logged a
+connection refusal to Cart-B [supporting logs](DIRECT-LOG-LINK). The request originated from
+[Synthetic monitor executions](DIRECT-SYNTHETIC-LINK).
 ```
 
 Links are reproducible, not immutable. Telemetry can age out and access controls still apply, so always retain supporting values in the answer.

@@ -55,6 +55,27 @@ class BuildLogsEventsLinkTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must not be empty"):
             build_link("https://example.com", "\n")
 
+    def test_rejects_inline_pipeline_commands(self) -> None:
+        with self.assertRaisesRegex(ValueError, "pipeline command on its own line"):
+            build_link(
+                "https://example.apps.dynatrace.com",
+                "fetch logs | filter loglevel == \"ERROR\" | limit 20",
+            )
+
+    def test_allows_pipe_characters_inside_quoted_values(self) -> None:
+        dql = (
+            "fetch logs\n"
+            "| filter contains(content, \"left | right\")\n"
+            "| limit 20"
+        )
+
+        result = build_link("https://example.apps.dynatrace.com", dql)
+        decoded_dql = unquote(
+            base64.b64decode(urlsplit(result).fragment).decode("utf-8")
+        )
+
+        self.assertEqual(decoded_dql, dql)
+
 
 if __name__ == "__main__":
     unittest.main()
