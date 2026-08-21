@@ -1,6 +1,6 @@
 ---
 name: jira-assistant
-description: "Read, search, summarize, create, update, and groom Jira Epics, Stories, Bugs, and related project work with senior-manager judgment and current repository evidence. Use when Codex needs to gather Jira information, explain status or dependencies, assess work against code/tests/PRs, refine concise scope or acceptance criteria, identify blockers or duplicates, turn repository findings into backlog work, or prepare user-approved Jira writes with relevant end-to-end validation and observability included."
+description: "Read, search, summarize, create, update, and groom concise Jira Epics, Stories, Bugs, and related project work with senior-manager judgment and current repository evidence. Use when Codex needs to gather Jira information, explain status or dependencies, assess work against code/tests/PRs, refine minimal executable scope or acceptance criteria, identify blockers or duplicates, turn repository findings into backlog work, or prepare user-approved Jira writes with proportionate validation and observability."
 ---
 
 # Jira Assistant
@@ -8,6 +8,7 @@ description: "Read, search, summarize, create, update, and groom Jira Epics, Sto
 ## Operate as a senior manager
 
 - Lead with the business or user outcome, ownership boundary, delivery sequence, and risk.
+- Treat a ticket as a concise outcome contract, not an implementation plan, research report, or proof-of-testing log.
 - Keep one independently understandable outcome per Story or Bug. Split unrelated or separately deployable work.
 - Prefer observable behavior over implementation instructions unless an architectural constraint must be preserved.
 - Make acceptance criteria testable, concise, and sufficient for engineering and QA to agree that the work is done.
@@ -48,30 +49,33 @@ description: "Read, search, summarize, create, update, and groom Jira Epics, Sto
 ### 4. Create or improve ticket content
 
 - Use the concise formats in [templates](references/templates.md).
-- Scale the ticket to the work. Include only the context, boundaries, and validation needed to make the outcome executable and verifiable; do not pad a small ticket to meet a word count or a fixed number of sections.
-- For very small or well-understood work, a one-sentence Description and one or two focused acceptance criteria may be sufficient. For complex work, add detail only when it clarifies contract, failure paths, ownership, rollout, or verification. Do not repeat acceptance criteria, link context, or implementation detail in the Description.
+- Start with one compact Description and the smallest set of acceptance criteria that determines whether the outcome is done. Add detail only to prevent a material ambiguity, ownership gap, or delivery risk.
+- Do not transfer every repository finding, operational property, test level, or linked ticket requirement into the description. Research should improve judgment without making the ticket a research report.
+- For sibling tickets with a shared outcome, keep the common criteria short. Add a service-specific criterion only when that service has a unique gap that must be resolved to complete this ticket.
+- Prefer one broad maintenance or validation criterion over an inventory of possible defects and checks. Name individual cases only when each one materially changes acceptance.
+- Use links for supporting or separately owned detail instead of restating it. State only the boundary or prerequisite the assignee needs to understand.
 - Keep exactly the useful current-state context. Make descriptions date agnostic; leave historical reconciliation to Jira history or an approved comment.
 - Do not add `Removed from this Story`, `Dependencies`, or dated reconciliation sections.
 - Put short, human-readable link labels in `Relevant Links`; never expose a long URL as its own label.
-- Summarize the facts needed to do the work so links are supporting context, not the only explanation.
+- Omit the `Relevant Links` section when links do not materially help execution.
 - For a Bug, include reproduction conditions, actual behavior, expected behavior, impact, and evidence.
-- Include validation at the right level: focused unit tests, integration/contract tests, relevant E2E coverage, and explicit human verification where needed.
+- Include only the validation needed to establish the outcome and its material regression risk. Do not add generic evidence, documentation, rollout, or review criteria by default.
 
 ### 5. Keep relevant E2E validation in the same ticket
 
-- Add relevant E2E acceptance criteria to every runtime feature, behavior change, and Bug fix. Cover the end-to-end user or system outcome plus material failure, recovery, and lifecycle paths that lower-level tests cannot establish.
+- Add an E2E acceptance criterion when a runtime feature, behavior change, or Bug fix has an important end-to-end outcome or regression risk that lower-level tests cannot establish.
 - Reuse the repository's existing E2E suite, clients, fixtures, environment conventions, and assertion patterns when discoverable.
 - Do not defer essential E2E coverage to an unspecified follow-up. If unusually broad execution belongs to a dedicated linked E2E ticket, retain the feature or Bug ticket's relevant E2E acceptance criteria and state the ownership split explicitly.
-- When E2E testing is genuinely inapplicable, such as for design-only, documentation-only, or non-runtime work, explicitly record that E2E impact was reviewed and specify the appropriate alternative validation.
+- Do not add a generic `E2E impact reviewed` criterion to operational configuration, documentation, or other work where E2E coverage is plainly irrelevant. State an alternative only when the validation boundary could otherwise be misunderstood.
 
 ### 6. Keep observability in the same ticket
 
-- Add observability acceptance criteria to every runtime feature, behavior change, and Bug fix. Never defer the necessary telemetry to an unspecified follow-up.
-- Specify the useful combination of bounded metrics, trace/span attributes, and structured PII-safe logs or MDC needed to detect and diagnose success, failure, latency, retries, and important domain outcomes.
+- Add observability acceptance criteria when the work changes runtime behavior, telemetry, or an operational response and the required signal is not already obvious from the outcome.
+- Prefer a concise observable outcome. Enumerate metrics, trace attributes, logs, tags, and dashboards only when those details are necessary to avoid an incorrect implementation.
 - Keep high-cardinality identifiers such as request, session, customer, cart, checkout, and order IDs out of metric tags. Put correlation identifiers in traces and PII-safe log context.
 - Reuse the repository's existing telemetry abstractions and naming conventions when discoverable.
 - Add dashboard or alert changes only when the operational response requires them.
-- If work cannot affect runtime behavior, explicitly record that observability impact was reviewed and existing signals remain sufficient; do not invent meaningless telemetry.
+- If work does not affect runtime behavior or telemetry, omit generic observability-impact wording rather than inventing a criterion.
 
 ### 7. Plan and approve every Jira write
 
