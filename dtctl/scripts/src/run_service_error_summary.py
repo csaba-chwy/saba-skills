@@ -5,15 +5,16 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import timedelta
 import json
 import os
-import re
 import sys
 from typing import Mapping, Sequence
 from urllib.parse import quote
 
 from build_logs_events_link import build_link, normalize_environment_url
 from build_service_rundown_query import (
+    ENTITY_ID_RE,
     ENVIRONMENTS,
     MAX_ERROR_GROUPS,
     build_service_error_totals_query,
@@ -23,13 +24,14 @@ from run_service_rundown import (
     CommandRunner,
     RundownError,
     _run,
+    format_timestamp,
+    parse_timestamp,
     query_records,
     resolve_window,
     verify_context,
 )
 
 
-ENTITY_ID_RE = re.compile(r"^SERVICE-[A-F0-9]{16}$")
 FAILURE_ANALYSIS_INTENT = "dynatrace.services/view-service-failure-analysis"
 
 
@@ -54,6 +56,12 @@ class ErrorGroup:
 
 
 @dataclass(frozen=True)
+class DiscoveredService:
+    entity_id: str
+    display_name: str
+
+
+@dataclass(frozen=True)
 class ServiceErrorSummary:
     environment: str
     service: str
@@ -62,6 +70,7 @@ class ServiceErrorSummary:
     end: str
     lookback: str
     deployments: tuple[DeploymentErrors, ...]
+    discovered_services: tuple[DiscoveredService, ...]
     top_errors: tuple[ErrorGroup, ...]
     breakdown_link: str
 
@@ -137,6 +146,45 @@ def execute_error_summary(
         start,
         end,
     )
+    discovered_services: tuple[DiscoveredService, ...] = ()
+    entity_ids: tuple[str, ...] = ()
+    if not deployments:
+        discovery_start = format_timestamp(
+            max(parse_timestamp(start), parse_timestamp(end) - timedelta(minutes=15))
+        )
+        discovery_dql = _service_span_query(
+            environment=environment,
+            service=service,
+            start=discovery_start,
+            end=end,
+        )
+        discovered_services = _services_from_span_records(
+            query_records(
+                runner,
+                context,
+                discovery_dql,
+                scan_limit_gbytes=5,
+            )
+        )
+        entity_ids = tuple(item.entity_id for item in discovered_services)
+        if entity_ids:
+            totals_dql = build_service_error_totals_query(
+                environment=environment,
+                service=service,
+                start=start,
+                end=end,
+                entity_ids=entity_ids,
+            )
+            total_records = query_records(runner, context, totals_dql)
+            deployments = _deployments_from_records(
+                total_records,
+                environment_url,
+                start,
+                end,
+                fallback_names={
+                    item.entity_id: item.display_name for item in discovered_services
+                },
+            )
 
     breakdown_dql = build_top_service_errors_query(
         environment=environment,
@@ -144,6 +192,7 @@ def execute_error_summary(
         start=start,
         end=end,
         limit=top,
+        entity_ids=entity_ids,
     )
     total_failures = sum(deployment.failures for deployment in deployments)
     top_records = (
@@ -165,6 +214,7 @@ def execute_error_summary(
         end=end,
         lookback=lookback,
         deployments=deployments,
+        discovered_services=discovered_services,
         top_errors=top_errors,
         breakdown_link=build_link(environment_url, breakdown_dql),
     )
@@ -175,23 +225,64 @@ def _optional_string(record: Mapping[str, object], name: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _service_span_query(
+    *, environment: str, service: str, start: str, end: str
+) -> str:
+    return "\n".join(
+        (
+            f'fetch spans, from:"{start}", to:"{end}"',
+            "| filter "
+            f'startsWith(k8s.workload.name, "[{environment}][") and '
+            f'endsWith(k8s.workload.name, "]{service}")',
+            "| filter isNotNull(dt.entity.service)",
+            "| fields start_time, k8s.workload.name, dt.entity.service, service.name",
+            "| sort start_time desc",
+            "| limit 20",
+        )
+    )
+
+
+def _services_from_span_records(
+    records: Sequence[Mapping[str, object]],
+) -> tuple[DiscoveredService, ...]:
+    services: dict[str, str] = {}
+    for record in records:
+        entity_id = _optional_string(record, "dt.entity.service")
+        if entity_id is None or not ENTITY_ID_RE.fullmatch(entity_id):
+            continue
+        service_name = _optional_string(record, "service.name")
+        workload_name = _optional_string(record, "k8s.workload.name")
+        display_name = service_name or workload_name or entity_id
+        services.setdefault(entity_id, display_name)
+    return tuple(
+        DiscoveredService(entity_id=entity_id, display_name=display_name)
+        for entity_id, display_name in services.items()
+    )
+
+
 def _deployments_from_records(
     records: Sequence[Mapping[str, object]],
     environment_url: str,
     start: str,
     end: str,
+    fallback_names: Mapping[str, str] | None = None,
 ) -> tuple[DeploymentErrors, ...]:
     grouped: dict[tuple[str, str | None], list[int]] = {}
     for record in records:
+        entity_id = _optional_string(record, "dt.entity.service")
         service_name = _optional_string(record, "service.name")
         if service_name is None:
-            if all(record.get(field) is None for field in ("service.name", "requests")):
+            if all(
+                record.get(field) is None
+                for field in ("service.name", "dt.entity.service", "requests")
+            ):
                 continue
-            raise RundownError("Dynatrace result is missing service.name")
+            service_name = (fallback_names or {}).get(entity_id or "") or entity_id
+            if service_name is None:
+                raise RundownError("Dynatrace result is missing service identity")
         failed = record.get("failed")
         if not isinstance(failed, bool):
             raise RundownError("Dynatrace result is missing Boolean field failed")
-        entity_id = _optional_string(record, "dt.entity.service")
         requests = _number(record, "requests")
         counts = grouped.setdefault((service_name, entity_id), [0, 0])
         counts[0] += requests
@@ -231,9 +322,23 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
         "",
     ]
     if not summary.deployments:
+        if summary.discovered_services:
+            found = ", ".join(
+                f"`{service.display_name}`" for service in summary.discovered_services
+            )
+            status = (
+                f"Application telemetry was found in spans for {found}, but no "
+                "request-count metrics matched those service entities in the window."
+            )
+        else:
+            status = (
+                "Neither the tagged service-name metric selector nor the bounded "
+                "workload-span fallback found telemetry. That result is inconclusive; "
+                "it is not evidence that the service does not exist."
+            )
         lines.extend(
             (
-                "No request-count metrics matched this logical service in the window.",
+                status,
                 "",
                 f"[Open the exact error query in Dynatrace]({summary.breakdown_link})",
             )

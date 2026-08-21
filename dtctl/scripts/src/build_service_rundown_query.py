@@ -13,6 +13,7 @@ RUNDOWN_METRICS = ("requests", "failures", "error-rate", "latency")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 INTERVAL_RE = re.compile(r"^[1-9][0-9]*(?:ns|us|ms|s|m|h|d|w)$")
 SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+ENTITY_ID_RE = re.compile(r"^SERVICE-[A-F0-9]{16}$")
 MAX_ERROR_GROUPS = 20
 
 
@@ -221,10 +222,11 @@ def build_service_error_totals_query(
     service: str,
     start: str,
     end: str,
+    entity_ids: tuple[str, ...] = (),
 ) -> str:
     """Return request totals split by entity and native failed dimension."""
     validate_service_window(environment, service, start, end)
-    service_filter = build_service_filter(environment, service)
+    service_filter = build_service_selector(environment, service, entity_ids)
     return "\n".join(
         (
             "timeseries requests = sum(dt.service.request.count, scalar: true), "
@@ -245,12 +247,13 @@ def build_top_service_errors_query(
     start: str,
     end: str,
     limit: int = 5,
+    entity_ids: tuple[str, ...] = (),
 ) -> str:
     """Return the top failed-request endpoint and HTTP-status groups."""
     validate_service_window(environment, service, start, end)
     if not 1 <= limit <= MAX_ERROR_GROUPS:
         raise ValueError(f"limit must be between 1 and {MAX_ERROR_GROUPS}")
-    service_filter = build_service_filter(environment, service)
+    service_filter = build_service_selector(environment, service, entity_ids)
     return "\n".join(
         (
             "timeseries failures = sum(dt.service.request.count, "
@@ -270,6 +273,24 @@ def build_service_filter(environment: str, service: str) -> str:
     return (
         f'startsWith(service.name, "[{environment}]") and '
         f'endsWith(service.name, "]{service}")'
+    )
+
+
+def build_service_selector(
+    environment: str, service: str, entity_ids: tuple[str, ...]
+) -> str:
+    """Prefer discovered entity IDs when tagged service.name is unavailable."""
+    if not entity_ids:
+        return build_service_filter(environment, service)
+    invalid = tuple(
+        entity_id
+        for entity_id in entity_ids
+        if not ENTITY_ID_RE.fullmatch(entity_id)
+    )
+    if invalid:
+        raise ValueError("entity IDs must be Dynatrace SERVICE IDs")
+    return " or ".join(
+        f'dt.entity.service == "{entity_id}"' for entity_id in dict.fromkeys(entity_ids)
     )
 
 

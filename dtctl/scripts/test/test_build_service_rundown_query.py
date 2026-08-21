@@ -259,6 +259,42 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
             "fields service.name, dt.entity.service, failed, requests", result
         )
 
+    def test_service_error_queries_can_fall_back_to_entity_ids(self) -> None:
+        entity_ids = (
+            "SERVICE-880DA3BBFCFE8E87",
+            "SERVICE-26EF4F42398F4D91",
+        )
+
+        totals = build_service_error_totals_query(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            start="2026-08-20T22:24:02Z",
+            end="2026-08-21T22:24:02Z",
+            entity_ids=entity_ids,
+        )
+        errors = build_top_service_errors_query(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            start="2026-08-20T22:24:02Z",
+            end="2026-08-21T22:24:02Z",
+            entity_ids=entity_ids,
+        )
+
+        for result in (totals, errors):
+            self.assertIn('dt.entity.service == "SERVICE-880DA3BBFCFE8E87"', result)
+            self.assertIn('dt.entity.service == "SERVICE-26EF4F42398F4D91"', result)
+            self.assertNotIn("startsWith(service.name", result)
+
+    def test_service_error_query_rejects_invalid_entity_ids(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Dynatrace SERVICE IDs"):
+            build_service_error_totals_query(
+                environment="prd",
+                service="agentic-commerce-orchestrator",
+                start="2026-08-20T22:24:02Z",
+                end="2026-08-21T22:24:02Z",
+                entity_ids=('SERVICE-invalid" or true',),
+            )
+
     def test_builds_ranked_service_error_breakdown(self) -> None:
         result = build_top_service_errors_query(
             environment="stg",
