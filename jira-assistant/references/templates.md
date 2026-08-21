@@ -1,6 +1,6 @@
 # Concise Jira templates
 
-Default to the shortest ticket that still gives the assignee a clear outcome and definition of done. Add context, links, validation, and service-specific detail only when they change execution or acceptance. Avoid implementation inventories, proof-of-testing checklists, and generic E2E or observability statements.
+Use the smallest structure that makes the outcome executable and verifiable. Omit optional sections, links, and criteria that add no useful information. Avoid implementation inventories, proof-of-testing checklists, and generic E2E or observability statements.
 
 ## Epic
 
@@ -9,12 +9,12 @@ Default to the shortest ticket that still gives the assignee a clear outcome and
 ```markdown
 ## Description
 
-[State the outcome, reason, and ownership boundary.]
+[State the outcome, reason, and ownership boundary in a short paragraph.]
 
 ## Acceptance Criteria
 
-- [Measurable outcome.]
-- [Only additional boundary or validation needed to define completion.]
+- [Measurable outcome or boundary.]
+- [Material delivery or verification condition, if needed.]
 ```
 
 ## Task or Story
@@ -24,20 +24,22 @@ Default to the shortest ticket that still gives the assignee a clear outcome and
 ```markdown
 ## Description
 
-[State the outcome and essential boundary in one or two sentences.]
+[State the outcome and current gap in one or two sentences.]
 
 ## Acceptance Criteria
 
-- [Primary observable outcome.]
-- [Only other condition that materially changes whether the work is done.]
+- [Observable behavior and important boundary.]
+- [Proportionate validation, if it needs to be explicit.]
 ```
 
-Add a `Relevant Links` section only when a link reduces necessary prose or identifies separately owned work. Keep the ticket understandable without copying the linked issue's requirements.
+For very small work, one Description sentence and one acceptance criterion can be enough.
 
 ## Bug adaptation
 
-Use the Task or Story template. State the reproduction conditions, actual versus expected behavior, and impact concisely. Add regression coverage or telemetry criteria only when they are material to accepting the fix.
+State the reproduction conditions, actual versus expected behavior, and impact without a long narrative. Acceptance criteria should require the fix and the smallest useful regression proof. Add E2E or telemetry work only when the risk or current signal gap warrants it.
 
-## Link style
+## Relationships and links
 
-Use short labels, not raw URLs.
+- Do not list Jira issue URLs, dependencies, blockers, duplicates, or related tickets in the body.
+- Use the Jira parent field for hierarchy and first-class `Blocks`, `Duplicate`, or `Relates` issue links for relationships. Verify directional links in raw Jira output.
+- Add an optional `Relevant Links` section only for non-Jira context that materially helps execution, such as a design or technical document. Use short human-readable labels rather than raw URLs.
