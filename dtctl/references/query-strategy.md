@@ -131,7 +131,7 @@ For short incidents use one-minute resolution; for day-scale windows use roughly
 
 Once a failure minute is known, query the root span immediately. When it returns a valid incident trace ID, stop and follow the top-level early-link rule before further drilldown.
 
-If metrics have no data, do not conclude that logs are absent. Probe the paired logical log selector, then retry with the exact workload if enrichment is missing.
+If metrics have no data, do not conclude that logs are absent or that the application does not exist. For a general rundown, let `run_service_rundown.py` perform its capped application-presence fallback. Otherwise probe the paired logical log selector, then retry with the environment-qualified workload name when enrichment is missing. An empty presence probe remains inconclusive; state the selector and window, then use the mapped telemetry stem, service note, and exact tagged workload before asking the user for another identifier or making any existence claim.
 
 ## Other bounded patterns
 

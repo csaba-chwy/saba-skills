@@ -219,6 +219,32 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn("fields latency_p99_ms", result)
         self.assertNotIn("request.count", result)
 
+    def test_scalar_failure_query_keeps_request_metric_presence(self) -> None:
+        result = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+            metrics=("failures",),
+        )
+
+        self.assertIn(
+            "metric_presence = sum(dt.service.request.count, scalar: true)", result
+        )
+        self.assertIn("fields failed_requests, metric_presence", result)
+
+    def test_scalar_error_rate_exposes_existing_request_input_as_presence(self) -> None:
+        result = build_scalar_rundown_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+            metrics=("error-rate",),
+        )
+
+        self.assertIn("metric_presence = requests", result)
+        self.assertIn("fields error_rate, metric_presence", result)
+
     def test_builds_service_error_totals_by_deployment(self) -> None:
         result = build_service_error_totals_query(
             environment="prd",

@@ -22,8 +22,8 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 
 | Question shape | Route | Budget |
 | --- | --- | --- |
-| “Rundown,” “is it healthy?”, “at a glance,” “anything wrong?” | General metric fast path with all four measures | One scalar query |
-| “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query |
+| “Rundown,” “is it healthy?”, “at a glance,” “anything wrong?” | General metric fast path with all four measures | One scalar query; bounded application-presence fallback only when empty |
+| “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query; bounded application-presence fallback only when empty |
 | “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; one endpoint/status ranking only when failures exist |
 | “Any active problems?”, “what did Davis detect?”, “problem history” | Davis problem fast path | One entity query, then one bounded problem query |
 | “Did this deployment/change cause a regression?” with a known timestamp | Change regression fast path | One before/after metric query; stop when thresholds are not exceeded |
@@ -35,7 +35,7 @@ This routing reflects the recurring question patterns behind the skill: broad he
 
 ## General metric fast path
 
-Use the bundled runner for broad health summaries and single aggregate request, failure, error-rate, or latency questions. If the user already supplied a tagged logical service or exact telemetry stem, do not read mappings, service notes, query-strategy references, or raw-query references.
+Use the bundled runner for broad health summaries and single aggregate request, failure, error-rate, or latency questions. An environment plus an application name is a sufficient starting target; do not require the user to supply a tagged `service.name`, entity ID, or exact workload. Normalize a known logical application through [mappings.md](mappings.md), then pass its telemetry stem to the runner. If the supplied application name is already the mapped stem, do not read its service note, query-strategy reference, or raw-query reference before running the fast path.
 
 For a broad health summary, run from this skill directory:
 
@@ -67,9 +67,12 @@ The runner deterministically:
 1. Resolves an absolute UTC window.
 2. Verifies the matching context URL, `readonly` safety level, and reusable OAuth session.
 3. Runs one bounded query containing only the selected measures and their required inputs.
-4. Prints ready-to-send Markdown with one exact Dynatrace metric-query table link.
+4. If that query is empty, treats the result as missing standard APM metrics—not a missing application—and performs a capped 15-minute presence check using the environment plus application stem: paired `log.source`/`env` or exact tagged workload logs first, then exact tagged workload spans only if logs are empty.
+5. Prints ready-to-send Markdown with the standard metrics or the application-presence evidence and one exact Dynatrace query link.
 
-Run the command with normal network and macOS Keychain access when the execution sandbox requires it. Return its stdout directly and stop. Do not add interpretation, another query, logs, spans, entity lookup, a proof table, or a follow-up investigation unless the user asked for it.
+Run the command with normal network and macOS Keychain access when the execution sandbox requires it. Return its stdout directly and stop when it contains standard metrics or application-presence evidence. Do not add interpretation, another query, entity lookup, or a proof table unless the user asked for it. If the bounded fallback is inconclusive, read the mapped service note and [references/query-strategy.md](references/query-strategy.md), then continue with exact-name discovery; do not stop with an absence claim.
+
+An empty metric series only proves that the metric selector had no points in that context and window. Never say or imply that an application, service, deployment, or workload does not exist based only on an empty metric, log, span, entity, or catalog query. State the selector and window that had no data, distinguish missing telemetry from nonexistence, and exhaust the supplied environment plus application identity before asking the user for another identifier.
 
 Never create local or inline telemetry visualizations. Do not invoke client-side visualization, image generation, HTML rendering, screenshots, or browser/UI work. When the user explicitly asks for a time trend, return a Dynatrace time-series link generated from the exact query.
 

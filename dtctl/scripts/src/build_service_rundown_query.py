@@ -188,6 +188,18 @@ def build_scalar_rundown_query(
     expressions, derived, fields = _metric_parts(
         metrics, latency_percentile=latency_percentile, scalar=True
     )
+    selected = normalize_metrics(metrics)
+    if (
+        ("failures" in selected or "error-rate" in selected)
+        and "requests" not in selected
+    ):
+        if "error-rate" in selected:
+            derived.append("metric_presence = requests")
+        else:
+            expressions.append(
+                "metric_presence = sum(dt.service.request.count, scalar: true)"
+            )
+        fields.append("metric_presence")
     lines = ["timeseries {"]
     lines.extend(
         f"  {expression}{',' if index < len(expressions) - 1 else ''}"
