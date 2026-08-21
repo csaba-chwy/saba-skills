@@ -65,6 +65,17 @@ python3 scripts/src/run_service_rundown.py \
 
 It performs context preflight, runs one scalar request/error/latency query, and emits ready-to-send Markdown with a table-style Dynatrace link. Stop there for summary requests.
 
+For a quick summary of what is failing, use the dedicated error runner instead of manually issuing totals, endpoint, region, log, and span queries:
+
+```bash
+python3 scripts/src/run_service_error_summary.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1d
+```
+
+It aggregates request and failure totals across the logical service, preserves each active entity for native Services Failure Analysis links, and ranks the top failing endpoint/status groups across regions. It performs the ranking query only when failures are present. Do not add raw telemetry unless the user asks for root cause or a specific failed request.
+
 Select only the requested measure for a focused question. This avoids calculating response-time percentiles for request-count questions or request/error measures for latency-only questions:
 
 ```bash

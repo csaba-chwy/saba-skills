@@ -13,6 +13,7 @@ RUNDOWN_METRICS = ("requests", "failures", "error-rate", "latency")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 INTERVAL_RE = re.compile(r"^[1-9][0-9]*(?:ns|us|ms|s|m|h|d|w)$")
 SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+MAX_ERROR_GROUPS = 20
 
 
 def normalize_metrics(metrics: tuple[str, ...]) -> tuple[str, ...]:
@@ -200,6 +201,80 @@ def build_scalar_rundown_query(
         lines.append("| fieldsAdd " + ", ".join(derived))
     lines.append(f"| fields {', '.join(fields)}")
     return "\n".join(lines)
+
+
+def build_service_error_totals_query(
+    *,
+    environment: str,
+    service: str,
+    start: str,
+    end: str,
+) -> str:
+    """Return request totals split by entity and native failed dimension."""
+    _validate_service_window(environment, service, start, end)
+    service_filter = _service_filter(environment, service)
+    return "\n".join(
+        (
+            "timeseries requests = sum(dt.service.request.count, scalar: true), "
+            "by: { service.name, dt.entity.service, failed }, "
+            f"filter: {{ {service_filter} }}, "
+            f'from: "{start}", to: "{end}", nonempty: true',
+            "| fields service.name, dt.entity.service, failed, requests",
+            "| sort service.name asc, failed desc",
+            f"| limit {2 * MAX_ERROR_GROUPS}",
+        )
+    )
+
+
+def build_top_service_errors_query(
+    *,
+    environment: str,
+    service: str,
+    start: str,
+    end: str,
+    limit: int = 5,
+) -> str:
+    """Return the top failed-request endpoint and HTTP-status groups."""
+    _validate_service_window(environment, service, start, end)
+    if not 1 <= limit <= MAX_ERROR_GROUPS:
+        raise ValueError(f"limit must be between 1 and {MAX_ERROR_GROUPS}")
+    service_filter = _service_filter(environment, service)
+    return "\n".join(
+        (
+            "timeseries failures = sum(dt.service.request.count, "
+            "filter: { failed == true }, default: 0, scalar: true), "
+            "by: { endpoint.name, http.response.status_code }, "
+            f"filter: {{ {service_filter} }}, "
+            f'from: "{start}", to: "{end}", nonempty: true',
+            "| fields endpoint.name, http.response.status_code, failures",
+            "| filter failures > 0",
+            "| sort failures desc, endpoint.name asc",
+            f"| limit {limit}",
+        )
+    )
+
+
+def _service_filter(environment: str, service: str) -> str:
+    return (
+        f'startsWith(service.name, "[{environment}]") and '
+        f'endsWith(service.name, "]{service}")'
+    )
+
+
+def _validate_service_window(
+    environment: str,
+    service: str,
+    start: str,
+    end: str,
+) -> None:
+    if environment not in ENVIRONMENTS:
+        raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
+    if not SERVICE_RE.fullmatch(service):
+        raise ValueError("service must be an untagged telemetry stem")
+    parsed_start = _parse_absolute_timestamp(start, "start")
+    parsed_end = _parse_absolute_timestamp(end, "end")
+    if parsed_end <= parsed_start:
+        raise ValueError("end must be later than start")
 
 
 def parse_args() -> argparse.Namespace:

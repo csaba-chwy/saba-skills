@@ -10,6 +10,8 @@ sys.path.insert(0, str(SRC_DIR))
 from build_service_rundown_query import (
     build_rundown_query,
     build_scalar_rundown_query,
+    build_service_error_totals_query,
+    build_top_service_errors_query,
 )
 from build_logs_events_graph_link import build_graph_link
 
@@ -216,6 +218,44 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn("response_time, 99, scalar: true", result)
         self.assertIn("fields latency_p99_ms", result)
         self.assertNotIn("request.count", result)
+
+    def test_builds_service_error_totals_by_deployment(self) -> None:
+        result = build_service_error_totals_query(
+            environment="prd",
+            service="sf-item",
+            start="2026-08-19T22:24:02Z",
+            end="2026-08-20T22:24:02Z",
+        )
+
+        self.assertIn("scalar: true", result)
+        self.assertIn("by: { service.name, dt.entity.service, failed }", result)
+        self.assertIn(
+            "fields service.name, dt.entity.service, failed, requests", result
+        )
+
+    def test_builds_ranked_service_error_breakdown(self) -> None:
+        result = build_top_service_errors_query(
+            environment="stg",
+            service="checkout-b",
+            start="2026-08-20T20:00:00Z",
+            end="2026-08-20T21:00:00Z",
+            limit=7,
+        )
+
+        self.assertIn("by: { endpoint.name, http.response.status_code }", result)
+        self.assertIn("filter failures > 0", result)
+        self.assertIn("sort failures desc, endpoint.name asc", result)
+        self.assertTrue(result.endswith("| limit 7"))
+
+    def test_rejects_oversized_error_breakdown(self) -> None:
+        with self.assertRaisesRegex(ValueError, "between 1 and 20"):
+            build_top_service_errors_query(
+                environment="prd",
+                service="sf-item",
+                start="2026-08-19T22:24:02Z",
+                end="2026-08-20T22:24:02Z",
+                limit=21,
+            )
 
 
 if __name__ == "__main__":
