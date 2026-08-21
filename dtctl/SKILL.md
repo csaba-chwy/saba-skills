@@ -24,7 +24,7 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 | --- | --- | --- |
 | “Rundown,” “is it healthy?”, “at a glance,” “anything wrong?” | General metric fast path with all four measures | One scalar query; bounded application-presence fallback only when empty |
 | “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query; bounded application-presence fallback only when empty |
-| “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; one endpoint/status ranking only when failures exist |
+| “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; bounded entity fallback only when empty; one ranking only when failures exist |
 | “Any active problems?”, “what did Davis detect?”, “problem history” | Davis problem fast path | One entity query, then one bounded problem query |
 | “Did this deployment/change cause a regression?” with a known timestamp | Change regression fast path | One before/after metric query; stop when thresholds are not exceeded |
 | “When did it spike?”, “by region/endpoint?”, “compare these windows” | One tailored metric timeline or comparison | One query first; no raw telemetry |
@@ -89,7 +89,7 @@ python3 scripts/src/run_service_error_summary.py \
   --lookback 1d
 ```
 
-The runner verifies the read-only context once and runs one request/failure query grouped by active service entity. It stops there when no failures exist; otherwise it runs one additional metric query that ranks failed requests by `endpoint.name` and `http.response.status_code`. It prints ready-to-send Markdown with exact counts, per-deployment rates, direct links to the native **Services > Failures** analysis for each active entity, and one reproducible DQL breakdown link.
+The runner verifies the read-only context once and runs one request/failure query grouped by active service entity. When the tagged `service.name` selector returns nothing, it does not assume the service is absent: it performs a capped 15-minute span lookup by exact environment-qualified `k8s.workload.name`, then retries the metric query with every discovered `dt.entity.service`. Metric rows may also have null `service.name`; use the discovered workload name as their display identity. It stops when no failures exist; otherwise it runs one additional metric query that ranks failed requests by `endpoint.name` and `http.response.status_code`. It prints ready-to-send Markdown with exact counts, per-deployment rates, direct links to the native **Services > Failures** analysis for each active entity, and one reproducible DQL breakdown link.
 
 This is the default route for quick error analysis because it avoids raw log and span scans. Treat a missing HTTP status as unavailable metric enrichment, not as a successful request. Use the native Failure Analysis links for failed traces, contextual logs, outgoing calls, database failures, and comparison mode. Continue to the standard investigation only when the user asks why a specific failure occurred or the summary identifies a concrete incident that needs root-cause analysis.
 

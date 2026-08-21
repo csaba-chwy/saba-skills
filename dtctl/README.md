@@ -93,7 +93,7 @@ python3 scripts/src/run_service_error_summary.py \
   --lookback 1d
 ```
 
-The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. It uses one metric query when there are no failures and two when a ranking is needed. Use `--top 10` to expand the default five groups.
+The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
 
 ## Quick Davis problem summary
 

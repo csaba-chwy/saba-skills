@@ -45,7 +45,7 @@ class FakeRunner:
                 stderr="",
             )
         dql = command[4]
-        if "dt.entity.service" in dql:
+        if "by: { service.name, dt.entity.service, failed }" in dql:
             failure_counts = (6_255, 58_866) if self.failures else (0, 0)
             records = [
                 {
@@ -104,6 +104,56 @@ class FakeRunner:
         )
 
 
+class NullServiceNameRunner(FakeRunner):
+    def __call__(self, command, timeout):
+        completed = super().__call__(command, timeout)
+        if "query" not in command:
+            return completed
+        dql = command[4]
+        if dql.startswith("fetch spans"):
+            records = [
+                {
+                    "k8s.workload.name": (
+                        "[prd][use1]agentic-commerce-orchestrator"
+                    ),
+                    "dt.entity.service": "SERVICE-880DA3BBFCFE8E87",
+                    "service.name": None,
+                },
+                {
+                    "k8s.workload.name": (
+                        "[prd][use2]agentic-commerce-orchestrator"
+                    ),
+                    "dt.entity.service": "SERVICE-26EF4F42398F4D91",
+                    "service.name": None,
+                },
+            ]
+        elif "startsWith(service.name" in dql:
+            records = []
+        elif "by: { service.name, dt.entity.service, failed }" in dql:
+            records = [
+                {
+                    "service.name": None,
+                    "dt.entity.service": "SERVICE-880DA3BBFCFE8E87",
+                    "failed": False,
+                    "requests": 739,
+                },
+                {
+                    "service.name": None,
+                    "dt.entity.service": "SERVICE-26EF4F42398F4D91",
+                    "failed": False,
+                    "requests": 613,
+                },
+            ]
+        else:
+            raise AssertionError(f"unexpected query: {dql}")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps({"records": records}),
+            stderr="",
+        )
+
+
 class RunServiceErrorSummaryTest(unittest.TestCase):
     def test_runs_two_metric_queries_and_renders_native_drilldowns(self) -> None:
         runner = FakeRunner()
@@ -142,6 +192,35 @@ class RunServiceErrorSummaryTest(unittest.TestCase):
         self.assertEqual(summary.failures, 0)
         self.assertEqual(summary.top_errors, ())
         self.assertIn("endpoint ranking was skipped", render_markdown(summary))
+
+    def test_falls_back_from_null_service_name_to_span_entity_ids(self) -> None:
+        runner = NullServiceNameRunner()
+        summary = execute_error_summary(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            lookback="1d",
+            end_time="2026-08-21T12:15:00Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+        markdown = render_markdown(summary)
+        query_commands = [command for command in runner.commands if "query" in command]
+
+        self.assertEqual(len(query_commands), 3)
+        self.assertTrue(query_commands[1][4].startswith("fetch spans"))
+        self.assertIn(
+            'from:"2026-08-21T12:00:00Z"',
+            query_commands[1][4],
+        )
+        self.assertIn("--default-scan-limit-gbytes", query_commands[1])
+        self.assertIn(
+            'dt.entity.service == "SERVICE-880DA3BBFCFE8E87"',
+            query_commands[2][4],
+        )
+        self.assertNotIn("startsWith(service.name", query_commands[2][4])
+        self.assertIn("1,352", markdown)
+        self.assertIn("[prd][use1]agentic-commerce-orchestrator", markdown)
+        self.assertIn("[prd][use2]agentic-commerce-orchestrator", markdown)
 
     def test_failure_analysis_link_contains_entity_and_absolute_window(self) -> None:
         result = build_failure_analysis_link(

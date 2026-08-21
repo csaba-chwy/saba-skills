@@ -74,7 +74,7 @@ python3 scripts/src/run_service_error_summary.py \
   --lookback 1d
 ```
 
-It aggregates request and failure totals across the logical service, preserves each active entity for native Services Failure Analysis links, and ranks the top failing endpoint/status groups across regions. It performs the ranking query only when failures are present. Do not add raw telemetry unless the user asks for root cause or a specific failed request.
+It aggregates request and failure totals across the logical service, preserves each active entity for native Services Failure Analysis links, and ranks the top failing endpoint/status groups across regions. It performs the ranking query only when failures are present. If the tagged `service.name` selector is empty, let the runner perform its capped workload-span lookup and entity-ID metric retry; do not treat null `service.name` as an absent service. Do not add other raw telemetry unless the user asks for root cause or a specific failed request.
 
 Select only the requested measure for a focused question. This avoids calculating response-time percentiles for request-count questions or request/error measures for latency-only questions:
 
