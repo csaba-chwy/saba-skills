@@ -1,6 +1,6 @@
 # Concise Jira templates
 
-Use the smallest useful structure for the work. A very short ticket may need only a brief Description and one or two acceptance criteria; add links, criteria, and context only when they improve shared understanding or verification. Avoid repetition, padding, and optional implementation detail.
+Default to the shortest ticket that still gives the assignee a clear outcome and definition of done. Add context, links, validation, and service-specific detail only when they change execution or acceptance. Avoid implementation inventories, proof-of-testing checklists, and generic E2E or observability statements.
 
 ## Epic
 
@@ -11,40 +11,32 @@ Use the smallest useful structure for the work. A very short ticket may need onl
 
 [State the outcome, reason, and ownership boundary.]
 
-## Relevant Links
-
-- [Primary context](https://example.com/context)
-
 ## Acceptance Criteria
 
-- [Measurable outcome and material failure behavior.]
-- [Critical boundary and relevant E2E validation.]
-- [Required bounded metrics, traces, and PII-safe logs/MDC.]
+- [Measurable outcome.]
+- [Only additional boundary or validation needed to define completion.]
 ```
 
-## Story
+## Task or Story
 
 **Summary:** `[Verb] [specific user or system outcome]`
 
 ```markdown
 ## Description
 
-[State the outcome, current gap, and boundary.]
-
-## Relevant Links
-
-- [Primary context](https://jira.example.com/browse/SHOP-123)
+[State the outcome and essential boundary in one or two sentences.]
 
 ## Acceptance Criteria
 
-- [Behavior, material failure path, and compatibility boundary.]
-- [Focused automated and relevant E2E tests.]
-- [Bounded metrics, traces, and PII-safe logs/MDC.]
+- [Primary observable outcome.]
+- [Only other condition that materially changes whether the work is done.]
 ```
+
+Add a `Relevant Links` section only when a link reduces necessary prose or identifies separately owned work. Keep the ticket understandable without copying the linked issue's requirements.
 
 ## Bug adaptation
 
-Use the Story template. State conditions, actual versus expected behavior, impact, and evidence. Require the fix, relevant E2E regression coverage, and telemetry.
+Use the Task or Story template. State the reproduction conditions, actual versus expected behavior, and impact concisely. Add regression coverage or telemetry criteria only when they are material to accepting the fix.
 
 ## Link style
 
