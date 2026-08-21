@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Answer general Dynatrace service questions efficiently and investigate specific incidents with dtctl through read-only production and nonproduction contexts. Use for service health, request/error/latency checks, trends and breakdowns, error diagnosis, trace-to-log correlation, deployment symptoms, and Kubernetes workload logs.
+description: Answer Dynatrace service questions efficiently and investigate incidents with dtctl through read-only production and nonproduction contexts. Use for service health, request/error/latency checks, Davis problems, change regressions, trends, error diagnosis, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, and novel DQL authoring or repair.
 ---
 
 # Dynatrace investigation with dtctl
@@ -25,8 +25,11 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 | “Rundown,” “is it healthy?”, “at a glance,” “anything wrong?” | General metric fast path with all four measures | One scalar query |
 | “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query |
 | “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; one endpoint/status ranking only when failures exist |
+| “Any active problems?”, “what did Davis detect?”, “problem history” | Davis problem fast path | One entity query, then one bounded problem query |
+| “Did this deployment/change cause a regression?” with a known timestamp | Change regression fast path | One before/after metric query; stop when thresholds are not exceeded |
 | “When did it spike?”, “by region/endpoint?”, “compare these windows” | One tailored metric timeline or comparison | One query first; no raw telemetry |
 | Root cause, exact RID/request/trace, logs, spans, or deployment symptoms | Standard investigation | Metric-first, then selective raw telemetry |
+| Write, fix, or optimize novel DQL | DQL authoring | Read only `references/dql-authoring.md`; execute once before verification |
 
 This routing reflects the recurring question patterns behind the skill: broad health summaries, single aggregate facts, time or dimension comparisons, and exact incident drilldowns. Match explicit intent over keywords. A mention of “errors” alone is an aggregate metric question; “why are errors happening?” is an investigation.
 
@@ -89,6 +92,43 @@ This is the default route for quick error analysis because it avoids raw log and
 
 Dynatrace documents the native UI in [Failure Analysis](https://docs.dynatrace.com/docs/observe/application-observability/services/failure-analysis): open **Services > Failures** for exploratory per-service failures, or use a problem's **Analyze failures** drill-down for pre-filtered incident context. **Problems** remains the incident-level impact and root-cause view.
 
+## Davis problem fast path
+
+Use the bundled problem runner for active problems, recent problem history, Davis
+root-cause results, or blast radius:
+
+```bash
+python3 scripts/src/run_service_problem_summary.py \
+  --environment prd --service sf-item --lookback 1d
+```
+
+Use `--status active` when the user asks only about current problems. The runner
+uses one metric query to resolve exact service entities observed in the window
+and one bounded problem query with a 5 GB cap. If no entity matches, it skips the problem query
+instead of scanning the tenant. Return its stdout and stop unless the user asks
+to explain a specific problem. For that drill-down, read
+[references/davis-problems.md](references/davis-problems.md).
+
+## Change regression fast path
+
+When a deployment, release, configuration change, or experiment timestamp is
+known, compare equal guarded windows with one metric query:
+
+```bash
+python3 scripts/src/run_service_regression.py \
+  --environment prd --service sf-item \
+  --change-time 2026-08-20T14:30:00Z
+```
+
+The default compares 30 minutes before and after the change with a five-minute
+guard. It flags p95 latency increases over 20%, absolute p95 above 2 seconds,
+error-rate increases over one percentage point, or request-volume drops over
+20%. Return its stdout and stop when thresholds are not exceeded or data is
+insufficient. Only after a detected regression should a follow-up rank endpoints
+or inspect a representative trace. If no trustworthy change timestamp exists,
+obtain it from deployment evidence; do not invent a midpoint and call it a
+deployment boundary.
+
 ## Focused metric trend or breakdown
 
 For a time trend, region or endpoint breakdown, or comparison, stay metric-only. Read [references/query-strategy.md](references/query-strategy.md), use `scripts/src/build_service_rundown_query.py` with only the requested `--metric`, confirmed low-cardinality `--group-by` fields, and an explicit interval, then execute that single query. Use `scripts/src/build_logs_events_graph_link.py` for a time-series link. Stop unless the result gives a concrete reason for a deeper investigation.
@@ -98,7 +138,7 @@ For a time trend, region or endpoint breakdown, or comparison, stay metric-only.
 For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 
 1. Fix the environment, service, absolute window, and user timezone once.
-2. Read [mappings.md](mappings.md) only to normalize the target, then read only its linked service note and [references/query-strategy.md](references/query-strategy.md).
+2. Read [mappings.md](mappings.md) only to normalize the target, then read only its linked service note and [references/query-strategy.md](references/query-strategy.md). For novel DQL, also read [references/dql-authoring.md](references/dql-authoring.md).
 3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window.
 4. Query only the logs or spans needed to answer the explicit question. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
 5. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.

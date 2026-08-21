@@ -179,6 +179,47 @@ def _number(record: Mapping[str, object], name: str) -> float:
     return float(value)
 
 
+def parse_records(output: str) -> list[Mapping[str, object]]:
+    """Parse dtctl JSON output and require a list of record objects."""
+    try:
+        value = json.loads(output)
+        records = value.get("records", [])
+    except (json.JSONDecodeError, AttributeError) as error:
+        raise RundownError("dtctl returned invalid JSON") from error
+    if not isinstance(records, list) or not all(
+        isinstance(record, dict) for record in records
+    ):
+        raise RundownError("Dynatrace returned invalid records")
+    return records
+
+
+def query_records(
+    runner: CommandRunner,
+    context: str,
+    dql: str,
+    *,
+    scan_limit_gbytes: int | None = None,
+) -> list[Mapping[str, object]]:
+    """Run one bounded DQL query and return validated records."""
+    command = [
+        "dtctl",
+        "--context",
+        context,
+        "query",
+        dql,
+        "--fetch-timeout-seconds",
+        "60",
+    ]
+    if scan_limit_gbytes is not None:
+        command.extend(("--default-scan-limit-gbytes", str(scan_limit_gbytes)))
+    command.extend(("-o", "json", "--plain"))
+    result = runner(command, 70)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "query failed"
+        raise RundownError(detail)
+    return parse_records(result.stdout)
+
+
 def _selected_number(
     record: Mapping[str, object],
     name: str,
@@ -217,28 +258,7 @@ def execute_rundown(
         metrics=selected_metrics,
         latency_percentile=latency_percentile,
     )
-    result = runner(
-        [
-            "dtctl",
-            "--context",
-            context,
-            "query",
-            dql,
-            "--fetch-timeout-seconds",
-            "60",
-            "-o",
-            "json",
-            "--plain",
-        ],
-        70,
-    )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "query failed"
-        raise RundownError(detail)
-    try:
-        records = json.loads(result.stdout).get("records", [])
-    except (json.JSONDecodeError, AttributeError) as error:
-        raise RundownError("dtctl returned invalid JSON") from error
+    records = query_records(runner, context, dql)
     if len(records) != 1 or not isinstance(records[0], dict):
         raise RundownError("Dynatrace returned no scalar service metrics")
     record = records[0]

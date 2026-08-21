@@ -94,3 +94,44 @@ python3 scripts/src/run_service_error_summary.py \
 ```
 
 The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. It uses one metric query when there are no failures and two when a ranking is needed. Use `--top 10` to expand the default five groups.
+
+## Quick Davis problem summary
+
+Resolve the logical service to entities observed in the requested window, then
+query only matching Davis problems:
+
+```bash
+cd dtctl
+python3 scripts/src/run_service_problem_summary.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1d
+```
+
+The runner performs one metric entity-resolution query and one bounded problem
+query. Use `--status active` for current problems. When request metrics cannot
+resolve a service entity, it skips the problem query rather than falling back to
+a tenant-wide scan.
+
+## Change regression check
+
+Compare equal service-metric windows around a known deployment or change:
+
+```bash
+cd dtctl
+python3 scripts/src/run_service_regression.py \
+  --environment prd \
+  --service sf-item \
+  --change-time 2026-08-20T14:30:00Z
+```
+
+The runner uses one combined DQL query for request volume, failed requests,
+error rate, and p95 latency. It prints a threshold-based result and stops cleanly
+when there is no regression or insufficient data. Window, guard, percentile, and
+threshold values are configurable through CLI flags.
+
+The DQL authoring and Davis problem guidance is selectively adapted from
+[Dynatrace for AI](https://github.com/Dynatrace/dynatrace-for-ai) at pinned
+upstream commit `ec2fb22d95167539dda7811b4347543431dce824` under Apache-2.0.
+Local tenant observations, read-only controls, query budgets, and direct evidence
+links remain authoritative.

@@ -23,6 +23,7 @@ from run_service_rundown import (
     CommandRunner,
     RundownError,
     _run,
+    query_records,
     resolve_window,
     verify_context,
 )
@@ -77,19 +78,6 @@ class ServiceErrorSummary:
         return 100.0 * self.failures / self.requests if self.requests else 0.0
 
 
-def _records(output: str) -> list[Mapping[str, object]]:
-    try:
-        value = json.loads(output)
-        records = value.get("records", [])
-    except (json.JSONDecodeError, AttributeError) as error:
-        raise RundownError("dtctl returned invalid JSON") from error
-    if not isinstance(records, list) or not all(
-        isinstance(record, dict) for record in records
-    ):
-        raise RundownError("Dynatrace returned invalid records")
-    return records
-
-
 def _number(record: Mapping[str, object], name: str) -> int:
     value = record.get(name)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -118,32 +106,6 @@ def build_failure_analysis_link(
     return f"{base_url}/ui/intent/{FAILURE_ANALYSIS_INTENT}#{quote(payload, safe='')}"
 
 
-def _query(
-    runner: CommandRunner,
-    context: str,
-    dql: str,
-) -> list[Mapping[str, object]]:
-    result = runner(
-        [
-            "dtctl",
-            "--context",
-            context,
-            "query",
-            dql,
-            "--fetch-timeout-seconds",
-            "60",
-            "-o",
-            "json",
-            "--plain",
-        ],
-        70,
-    )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "query failed"
-        raise RundownError(detail)
-    return _records(result.stdout)
-
-
 def execute_error_summary(
     *,
     environment: str,
@@ -168,7 +130,7 @@ def execute_error_summary(
         start=start,
         end=end,
     )
-    total_records = _query(runner, context, totals_dql)
+    total_records = query_records(runner, context, totals_dql)
     deployments = _deployments_from_records(
         total_records,
         environment_url,
@@ -184,7 +146,9 @@ def execute_error_summary(
         limit=top,
     )
     total_failures = sum(deployment.failures for deployment in deployments)
-    top_records = _query(runner, context, breakdown_dql) if total_failures else []
+    top_records = (
+        query_records(runner, context, breakdown_dql) if total_failures else []
+    )
     top_errors = tuple(
         ErrorGroup(
             endpoint=_optional_string(record, "endpoint.name"),

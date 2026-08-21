@@ -211,8 +211,8 @@ def build_service_error_totals_query(
     end: str,
 ) -> str:
     """Return request totals split by entity and native failed dimension."""
-    _validate_service_window(environment, service, start, end)
-    service_filter = _service_filter(environment, service)
+    validate_service_window(environment, service, start, end)
+    service_filter = build_service_filter(environment, service)
     return "\n".join(
         (
             "timeseries requests = sum(dt.service.request.count, scalar: true), "
@@ -235,10 +235,10 @@ def build_top_service_errors_query(
     limit: int = 5,
 ) -> str:
     """Return the top failed-request endpoint and HTTP-status groups."""
-    _validate_service_window(environment, service, start, end)
+    validate_service_window(environment, service, start, end)
     if not 1 <= limit <= MAX_ERROR_GROUPS:
         raise ValueError(f"limit must be between 1 and {MAX_ERROR_GROUPS}")
-    service_filter = _service_filter(environment, service)
+    service_filter = build_service_filter(environment, service)
     return "\n".join(
         (
             "timeseries failures = sum(dt.service.request.count, "
@@ -254,14 +254,14 @@ def build_top_service_errors_query(
     )
 
 
-def _service_filter(environment: str, service: str) -> str:
+def build_service_filter(environment: str, service: str) -> str:
     return (
         f'startsWith(service.name, "[{environment}]") and '
         f'endsWith(service.name, "]{service}")'
     )
 
 
-def _validate_service_window(
+def validate_service_window(
     environment: str,
     service: str,
     start: str,
@@ -271,6 +271,11 @@ def _validate_service_window(
         raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
     if not SERVICE_RE.fullmatch(service):
         raise ValueError("service must be an untagged telemetry stem")
+    validate_absolute_window(start, end)
+
+
+def validate_absolute_window(start: str, end: str) -> None:
+    """Require a bounded, increasing pair of absolute RFC 3339 timestamps."""
     parsed_start = _parse_absolute_timestamp(start, "start")
     parsed_end = _parse_absolute_timestamp(end, "end")
     if parsed_end <= parsed_start:
