@@ -24,6 +24,7 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 | --- | --- | --- |
 | “Rundown,” “is it healthy?”, “at a glance,” “anything wrong?” | General metric fast path with all four measures | One scalar query |
 | “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query |
+| “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; one endpoint/status ranking only when failures exist |
 | “When did it spike?”, “by region/endpoint?”, “compare these windows” | One tailored metric timeline or comparison | One query first; no raw telemetry |
 | Root cause, exact RID/request/trace, logs, spans, or deployment symptoms | Standard investigation | Metric-first, then selective raw telemetry |
 
@@ -70,6 +71,23 @@ Run the command with normal network and macOS Keychain access when the execution
 Never create local or inline telemetry visualizations. Do not invoke client-side visualization, image generation, HTML rendering, screenshots, or browser/UI work. When the user explicitly asks for a time trend, return a Dynatrace time-series link generated from the exact query.
 
 If authentication is unavailable, report the exact login command printed by the script and stop. The user can run that command manually; rerun the rundown after authentication succeeds.
+
+## Service error fast path
+
+Use the bundled error-summary runner when the user wants a quick explanation of what is failing, rather than only a failure count or a full root-cause investigation:
+
+```bash
+python3 scripts/src/run_service_error_summary.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1d
+```
+
+The runner verifies the read-only context once and runs one request/failure query grouped by active service entity. It stops there when no failures exist; otherwise it runs one additional metric query that ranks failed requests by `endpoint.name` and `http.response.status_code`. It prints ready-to-send Markdown with exact counts, per-deployment rates, direct links to the native **Services > Failures** analysis for each active entity, and one reproducible DQL breakdown link.
+
+This is the default route for quick error analysis because it avoids raw log and span scans. Treat a missing HTTP status as unavailable metric enrichment, not as a successful request. Use the native Failure Analysis links for failed traces, contextual logs, outgoing calls, database failures, and comparison mode. Continue to the standard investigation only when the user asks why a specific failure occurred or the summary identifies a concrete incident that needs root-cause analysis.
+
+Dynatrace documents the native UI in [Failure Analysis](https://docs.dynatrace.com/docs/observe/application-observability/services/failure-analysis): open **Services > Failures** for exploratory per-service failures, or use a problem's **Analyze failures** drill-down for pre-filtered incident context. **Problems** remains the incident-level impact and root-cause view.
 
 ## Focused metric trend or breakdown
 

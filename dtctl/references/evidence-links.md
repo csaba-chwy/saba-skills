@@ -10,6 +10,7 @@ Dynatrace documents the [Distributed Tracing app](https://docs.dynatrace.com/doc
 | --- | --- | --- |
 | One known `trace.id` | Distributed Tracing single-trace waterfall | `dynatrace.distributedtracing/view-trace` |
 | A filtered set of requests or spans | Distributed Tracing explorer | `dynatrace.distributedtracing/view-traces` |
+| Per-service failure patterns, traces, and contextual logs | Services Failure Analysis | `dynatrace.services/view-service-failure-analysis` |
 | Synthetic monitor identity, configuration, or current health | Synthetic monitor details | `dynatrace.synthetic/view-synthetic-monitor` |
 | Synthetic failures, performance, or run history | Synthetic executions | `dynatrace.synthetic/view-synthetic-monitor-executions` |
 | Bounded logs | Logs and Events Advanced-mode table | `scripts/src/build_logs_events_link.py` |
@@ -22,6 +23,8 @@ Do not use a query app merely because DQL found the resource. Discovery and evid
 ## App-native links
 
 Use the selected read-only context and `dtctl open intent` without `--browser`. It prints a tenant-correct AppShell URL and does not open the UI or change a Dynatrace resource.
+
+The bundled `run_service_error_summary.py` is the optimized exception for Services Failure Analysis links: after verifying the context URL, it locally encodes the installed intent's required `dt.entity.service` and bounded `dt.timeframe` payload. This avoids repeated intent-discovery calls while retaining tenant, entity, and timeframe validation.
 
 ### Exact trace
 

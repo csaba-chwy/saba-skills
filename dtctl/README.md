@@ -78,3 +78,19 @@ dtctl --context "$DT_CONTEXT" query \
 ```
 
 The verification queries intentionally return only minimal, non-sensitive fields. A successful empty result still proves authorization; an authorization error does not. Do not print, export, or commit stored OAuth credentials.
+
+## Quick service error summary
+
+Dynatrace's native per-service error UI is **Services > Failures**. It complements **Problems**: Problems explains detected incidents and their impact chain, while Failure Analysis supports exploratory filtering by service, endpoint, failure type, and timeframe, with failed traces, contextual logs, downstream calls, and comparison mode. See the official [Failure Analysis documentation](https://docs.dynatrace.com/docs/observe/application-observability/services/failure-analysis).
+
+Run the repository's metric-first summary before scanning raw logs or spans:
+
+```bash
+cd dtctl
+python3 scripts/src/run_service_error_summary.py \
+  --environment prd \
+  --service sf-item \
+  --lookback 1d
+```
+
+The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. It uses one metric query when there are no failures and two when a ranking is needed. Use `--top 10` to expand the default five groups.
