@@ -60,6 +60,33 @@ class FakeRunner:
         )
 
 
+class EmptyMetricRunner(FakeRunner):
+    def __init__(self, *, logs=(), spans=()) -> None:
+        super().__init__()
+        self.logs = list(logs)
+        self.spans = list(spans)
+
+    def __call__(self, command, timeout):
+        completed = super().__call__(command, timeout)
+        if "query" not in command:
+            return completed
+        dql = command[4]
+        if dql.startswith("timeseries"):
+            records = []
+        elif dql.startswith("fetch logs"):
+            records = self.logs
+        elif dql.startswith("fetch spans"):
+            records = self.spans
+        else:
+            raise AssertionError(f"unexpected query: {dql}")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps({"records": records}),
+            stderr="",
+        )
+
+
 class RunServiceRundownTest(unittest.TestCase):
     def test_resolves_exact_absolute_window(self) -> None:
         start, end = resolve_window(
@@ -146,6 +173,138 @@ class RunServiceRundownTest(unittest.TestCase):
 
         self.assertIn("p99 latency: **12.50 ms**", markdown)
         self.assertNotIn("Requests", markdown)
+
+    def test_empty_service_metrics_fall_back_to_application_logs(self) -> None:
+        runner = EmptyMetricRunner(
+            logs=(
+                {
+                    "k8s.workload.name": "[prd][use1]agentic-commerce-orchestrator",
+                    "timestamp": "2026-08-20T22:23:58Z",
+                },
+                {
+                    "k8s.workload.name": "[prd][use1]agentic-commerce-orchestrator",
+                    "timestamp": "2026-08-20T22:23:57Z",
+                },
+            )
+        )
+
+        result = execute_rundown(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+        markdown = render_markdown(result)
+        query_commands = [command for command in runner.commands if "query" in command]
+
+        self.assertEqual(len(query_commands), 2)
+        self.assertTrue(query_commands[1][4].startswith("fetch logs"))
+        self.assertIn(
+            'log.source == "agentic-commerce-orchestrator"', query_commands[1][4]
+        )
+        self.assertIn('env == "prd"', query_commands[1][4])
+        self.assertIn(
+            'startsWith(k8s.workload.name, "[prd][")', query_commands[1][4]
+        )
+        self.assertIn("--default-scan-limit-gbytes", query_commands[1])
+        self.assertIn("standard service metrics unavailable", markdown)
+        self.assertIn("Application telemetry is present", markdown)
+        self.assertIn("[prd][use1]agentic-commerce-orchestrator", markdown)
+        self.assertIn(
+            "does not mean the application or workload does not exist", markdown
+        )
+
+    def test_null_only_scalar_record_uses_application_fallback(self) -> None:
+        class NullMetricRunner(EmptyMetricRunner):
+            def __call__(self, command, timeout):
+                completed = super().__call__(command, timeout)
+                if "query" in command and command[4].startswith("timeseries"):
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=json.dumps(
+                            {
+                                "records": [
+                                    {
+                                        "requests": None,
+                                        "failed_requests": 0,
+                                        "error_rate": 0.0,
+                                        "latency_p95_ms": None,
+                                    }
+                                ]
+                            }
+                        ),
+                        stderr="",
+                    )
+                return completed
+
+        runner = NullMetricRunner(
+            logs=(
+                {
+                    "k8s.workload.name": "[prd][use1]agentic-commerce-orchestrator",
+                    "timestamp": "2026-08-20T22:23:58Z",
+                },
+            )
+        )
+
+        result = execute_rundown(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+
+        self.assertIn("Application telemetry is present", render_markdown(result))
+
+    def test_empty_log_fallback_checks_exact_application_spans(self) -> None:
+        runner = EmptyMetricRunner(
+            spans=(
+                {
+                    "k8s.workload.name": "[prd][use1]agentic-commerce-orchestrator",
+                    "start_time": "2026-08-20T22:23:57Z",
+                },
+            )
+        )
+
+        result = execute_rundown(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+        markdown = render_markdown(result)
+        query_commands = [command for command in runner.commands if "query" in command]
+
+        self.assertEqual(len(query_commands), 3)
+        self.assertTrue(query_commands[2][4].startswith("fetch spans"))
+        self.assertIn(
+            'endsWith(k8s.workload.name, "]agentic-commerce-orchestrator")',
+            query_commands[2][4],
+        )
+        self.assertIn("Spans: **1** sample record", markdown)
+
+    def test_empty_bounded_discovery_is_explicitly_inconclusive(self) -> None:
+        runner = EmptyMetricRunner()
+
+        result = execute_rundown(
+            environment="prd",
+            service="agentic-commerce-orchestrator",
+            lookback="1d",
+            end_time="2026-08-20T22:24:02Z",
+            environ={"DTCTL_PROD_ENVIRONMENT": "https://prod.example.com"},
+            runner=runner,
+        )
+        markdown = render_markdown(result)
+
+        self.assertIn("That result is inconclusive", markdown)
+        self.assertIn("before making an existence claim", markdown)
+        self.assertNotIn("service does not exist", markdown.lower())
 
 
 if __name__ == "__main__":

@@ -53,6 +53,28 @@ class Rundown:
     link: str
 
 
+@dataclass(frozen=True)
+class ApplicationTelemetry:
+    source: str
+    workload: str | None
+    records: int
+    latest: str | None
+
+
+@dataclass(frozen=True)
+class MetriclessRundown:
+    environment: str
+    service: str
+    context: str
+    start: str
+    end: str
+    lookback: str
+    discovery_start: str
+    evidence: tuple[ApplicationTelemetry, ...]
+    discovery_source: str | None
+    link: str
+
+
 def _run(command: Sequence[str], timeout: int) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -172,10 +194,10 @@ def verify_context(
     return context, expected_url
 
 
-def _number(record: Mapping[str, object], name: str) -> float:
+def _optional_number(record: Mapping[str, object], name: str) -> float | None:
     value = record.get(name)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise RundownError(f"Dynatrace result is missing numeric field {name}")
+        return None
     return float(value)
 
 
@@ -226,7 +248,160 @@ def _selected_number(
     *,
     selected: bool,
 ) -> float | None:
-    return _number(record, name) if selected else None
+    return _optional_number(record, name) if selected else None
+
+
+def _has_standard_metric_data(
+    record: Mapping[str, object],
+    *,
+    metrics: tuple[str, ...],
+    latency_percentile: int,
+) -> bool:
+    available: list[bool] = []
+    if "requests" in metrics:
+        available.append(_optional_number(record, "requests") is not None)
+    if "failures" in metrics or "error-rate" in metrics:
+        presence_field = "requests" if "requests" in metrics else "metric_presence"
+        available.append(_optional_number(record, presence_field) is not None)
+    if "latency" in metrics:
+        available.append(
+            _optional_number(record, f"latency_p{latency_percentile}_ms") is not None
+        )
+    return any(available)
+
+
+def _application_log_query(
+    *, environment: str, service: str, start: str, end: str
+) -> str:
+    return "\n".join(
+        (
+            f'fetch logs, from:"{start}", to:"{end}"',
+            "| filter "
+            f'(log.source == "{service}" and env == "{environment}") or '
+            f'(startsWith(k8s.workload.name, "[{environment}][") and '
+            f'endsWith(k8s.workload.name, "]{service}"))',
+            "| fields timestamp, k8s.workload.name",
+            "| limit 20",
+        )
+    )
+
+
+def _application_span_query(
+    *, environment: str, service: str, start: str, end: str
+) -> str:
+    return "\n".join(
+        (
+            f'fetch spans, from:"{start}", to:"{end}"',
+            "| filter "
+            f'startsWith(k8s.workload.name, "[{environment}][") and '
+            f'endsWith(k8s.workload.name, "]{service}")',
+            "| fields start_time, k8s.workload.name",
+            "| limit 20",
+        )
+    )
+
+
+def _application_evidence(
+    records: Sequence[Mapping[str, object]], *, source: str
+) -> tuple[ApplicationTelemetry, ...]:
+    time_field = "timestamp" if source == "logs" else "start_time"
+    grouped: dict[str | None, tuple[int, str | None]] = {}
+    for record in records:
+        workload = record.get("k8s.workload.name")
+        workload_name = workload if isinstance(workload, str) else None
+        observed_at = record.get(time_field)
+        observed_timestamp = observed_at if isinstance(observed_at, str) else None
+        count, latest = grouped.get(workload_name, (0, None))
+        if observed_timestamp is not None and (
+            latest is None or observed_timestamp > latest
+        ):
+            latest = observed_timestamp
+        grouped[workload_name] = (count + 1, latest)
+    return tuple(
+        ApplicationTelemetry(
+            source=source,
+            workload=workload,
+            records=count,
+            latest=latest,
+        )
+        for workload, (count, latest) in grouped.items()
+    )
+
+
+def discover_application_telemetry(
+    *,
+    environment: str,
+    service: str,
+    context: str,
+    environment_url: str,
+    start: str,
+    end: str,
+    lookback: str,
+    metric_dql: str,
+    runner: CommandRunner,
+) -> MetriclessRundown:
+    start_time = parse_timestamp(start)
+    end_time = parse_timestamp(end)
+    discovery_start = format_timestamp(max(start_time, end_time - timedelta(minutes=15)))
+    discovery_errors: list[RundownError] = []
+
+    for source, dql in (
+        (
+            "logs",
+            _application_log_query(
+                environment=environment,
+                service=service,
+                start=discovery_start,
+                end=end,
+            ),
+        ),
+        (
+            "spans",
+            _application_span_query(
+                environment=environment,
+                service=service,
+                start=discovery_start,
+                end=end,
+            ),
+        ),
+    ):
+        try:
+            records = query_records(runner, context, dql, scan_limit_gbytes=5)
+        except RundownError as error:
+            discovery_errors.append(error)
+            continue
+        if records:
+            return MetriclessRundown(
+                environment=environment,
+                service=service,
+                context=context,
+                start=start,
+                end=end,
+                lookback=lookback,
+                discovery_start=discovery_start,
+                evidence=_application_evidence(records, source=source),
+                discovery_source=source,
+                link=build_link(environment_url, dql),
+            )
+
+    if len(discovery_errors) == 2:
+        raise RundownError(
+            "standard service metrics were empty and bounded application "
+            "discovery failed; this is not evidence that the application "
+            "does not exist: " + "; ".join(str(error) for error in discovery_errors)
+        )
+    return MetriclessRundown(
+        environment=environment,
+        service=service,
+        context=context,
+        start=start,
+        end=end,
+        lookback=lookback,
+        discovery_start=discovery_start,
+        evidence=(),
+        discovery_source=None,
+        link=build_link(environment_url, metric_dql),
+    )
 
 
 def execute_rundown(
@@ -240,7 +415,7 @@ def execute_rundown(
     now: datetime | None = None,
     metrics: tuple[str, ...] = (),
     latency_percentile: int = 95,
-) -> Rundown:
+) -> Rundown | MetriclessRundown:
     selected_metrics = normalize_metrics(metrics)
     if not 1 <= latency_percentile <= 99:
         raise ValueError("latency percentile must be between 1 and 99")
@@ -259,9 +434,44 @@ def execute_rundown(
         latency_percentile=latency_percentile,
     )
     records = query_records(runner, context, dql)
-    if len(records) != 1 or not isinstance(records[0], dict):
-        raise RundownError("Dynatrace returned no scalar service metrics")
+    if not records:
+        return discover_application_telemetry(
+            environment=environment,
+            service=service,
+            context=context,
+            environment_url=environment_url,
+            start=start,
+            end=end,
+            lookback=lookback,
+            metric_dql=dql,
+            runner=runner,
+        )
+    if len(records) != 1:
+        raise RundownError("Dynatrace returned multiple scalar service records")
     record = records[0]
+    if not _has_standard_metric_data(
+        record,
+        metrics=selected_metrics,
+        latency_percentile=latency_percentile,
+    ):
+        return discover_application_telemetry(
+            environment=environment,
+            service=service,
+            context=context,
+            environment_url=environment_url,
+            start=start,
+            end=end,
+            lookback=lookback,
+            metric_dql=dql,
+            runner=runner,
+        )
+    request_metric_available = (
+        _optional_number(
+            record,
+            "requests" if "requests" in selected_metrics else "metric_presence",
+        )
+        is not None
+    )
     return Rundown(
         environment=environment,
         service=service,
@@ -272,17 +482,24 @@ def execute_rundown(
         metrics=selected_metrics,
         latency_percentile=latency_percentile,
         requests=(
-            round(_number(record, "requests"))
+            round(value)
             if "requests" in selected_metrics
+            and (value := _optional_number(record, "requests")) is not None
             else None
         ),
         failed_requests=(
-            round(_number(record, "failed_requests"))
+            round(value)
             if "failures" in selected_metrics
+            and request_metric_available
+            and (value := _optional_number(record, "failed_requests")) is not None
             else None
         ),
-        error_rate=_selected_number(
-            record, "error_rate", selected="error-rate" in selected_metrics
+        error_rate=(
+            _selected_number(
+                record, "error_rate", selected="error-rate" in selected_metrics
+            )
+            if request_metric_available
+            else None
         ),
         latency_ms=_selected_number(
             record,
@@ -293,7 +510,41 @@ def execute_rundown(
     )
 
 
-def render_markdown(result: Rundown) -> str:
+def render_markdown(result: Rundown | MetriclessRundown) -> str:
+    if isinstance(result, MetriclessRundown):
+        lines = [
+            f"### `[{result.environment}]{result.service}` — standard service metrics unavailable",
+            f"`{result.context}` · `{result.start}` to `{result.end}`",
+            "",
+            "No standard request, failure, error-rate, or latency series matched "
+            "this application selector in the requested window. This does not "
+            "mean the application or workload does not exist.",
+            "",
+        ]
+        if result.evidence:
+            lines.append(
+                "Application telemetry is present in the bounded fallback window "
+                f"`{result.discovery_start}` to `{result.end}`:"
+            )
+            for item in result.evidence:
+                workload = item.workload or "workload name unavailable"
+                latest = f"; newest sample `{item.latest}`" if item.latest else ""
+                record_label = "sample record" if item.records == 1 else "sample records"
+                lines.append(
+                    f"- {item.source.title()}: **{item.records:,}** {record_label} for "
+                    f"`{workload}`{latest}"
+                )
+            link_label = f"Open the exact {result.discovery_source} discovery query"
+        else:
+            lines.append(
+                "The bounded 15-minute log and span discovery did not produce a "
+                "match. That result is inconclusive; resolve the mapped telemetry "
+                "stem or exact tagged workload before making an existence claim."
+            )
+            link_label = "Open the exact standard-metric query"
+        lines.extend(("", f"[{link_label}]({result.link})"))
+        return "\n".join(lines)
+
     lines = [
         f"### `[{result.environment}]{result.service}` — last {result.lookback}",
         f"`{result.context}` · `{result.start}` to `{result.end}`",
@@ -312,7 +563,13 @@ def render_markdown(result: Rundown) -> str:
                 f"**{result.latency_ms:.2f} ms**"
             )
         else:
-            raise RundownError(f"rundown result is missing selected metric {metric}")
+            label = {
+                "requests": "Requests",
+                "failures": "Failed requests",
+                "error-rate": "Error rate",
+                "latency": f"p{result.latency_percentile} latency",
+            }[metric]
+            lines.append(f"- {label}: **unavailable**")
     lines.extend(("", f"[Open the exact query in Dynatrace]({result.link})"))
     return "\n".join(lines)
 
