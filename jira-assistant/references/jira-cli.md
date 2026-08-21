@@ -58,17 +58,21 @@ Create Epics with `jira epic create` and Bugs with `jira issue create -tBug`; ve
 
 If creation returns HTTP 400, search for the exact summary before retrying. Capture the key from a successful response and immediately read the issue back.
 
-## Parents, links, and workflow
+## Parents, issue links, and workflow
+
+Represent Jira-to-Jira relationships as fields or issue links, never as URLs or dependency lists in the description. Use parents for hierarchy, `Blocks` for directional prerequisites, `Duplicate` for duplicates, and `Relates` for meaningful non-directional associations.
 
 ```text
 jira issue edit SHOP-123 --parent SHOP-98 --no-input
 jira epic remove SHOP-123
 jira issue link SHOP-100 SHOP-123 Blocks
+jira issue link SHOP-124 SHOP-123 Duplicate
+jira issue link SHOP-125 SHOP-123 Relates
 jira issue unlink SHOP-100 SHOP-123
 jira issue move SHOP-123 "In Progress"
 ```
 
-Confirm link direction in the raw readback. Do not use an empty `--parent` to clear a parent. Transition only to the exact authorized workflow status; do not silently substitute a terminal state.
+State the intended `blocks` / `is blocked by` direction in the approved plan, then confirm that direction in raw readback. If it is reversed, stop before continuing a batch and correct only the approved relationship. Do not use an empty `--parent` to clear a parent. Transition only to the exact authorized workflow status; do not silently substitute a terminal state.
 
 ## Read-back
 

@@ -1,105 +1,59 @@
 ---
 name: jira-assistant
-description: "Read, search, summarize, create, update, and groom concise Jira Epics, Stories, Bugs, and related project work with senior-manager judgment and current repository evidence. Use when Codex needs to gather Jira information, explain status or dependencies, assess work against code/tests/PRs, refine minimal executable scope or acceptance criteria, identify blockers or duplicates, turn repository findings into backlog work, or prepare user-approved Jira writes with proportionate validation and observability."
+description: "Read, search, summarize, create, update, and groom Jira work with concise ticket content, appropriate repository evidence, explicit approval for writes, and first-class Jira relationships."
 ---
 
 # Jira Assistant
 
-## Operate as a senior manager
+## Apply senior judgment
 
-- Lead with the business or user outcome, ownership boundary, delivery sequence, and risk.
+- Lead with the outcome, ownership boundary, delivery order, and material risk.
 - Treat a ticket as a concise outcome contract, not an implementation plan, research report, or proof-of-testing log.
-- Keep one independently understandable outcome per Story or Bug. Split unrelated or separately deployable work.
-- Prefer observable behavior over implementation instructions unless an architectural constraint must be preserved.
-- Make acceptance criteria testable, concise, and sufficient for engineering and QA to agree that the work is done.
-- Detect overlap, missing prerequisites, unclear ownership, stale assumptions, and status/evidence mismatches.
-- Surface only decisions that materially change product behavior, priority, scope, or ownership. Give a recommendation and impact for each decision.
+- Keep one independently understandable outcome per Story or Bug; split unrelated or separately deployable work.
+- Prefer observable behavior over implementation instructions. Make acceptance criteria brief and testable.
+- Surface only decisions that materially change behavior, priority, scope, or ownership, with a recommendation and impact.
 
-## Follow the workflow
-
-### 1. Confirm the requested action
+## 1. Match discovery to the request
 
 - Treat view, audit, explain, draft, and status requests as read-only.
-- Treat a request to create, update, transition, assign, comment on, or link Jira work as authorization to prepare a read-only change plan, not authorization to execute the write.
-- Do not perform any Jira write until the user explicitly approves the proposed plan.
-- Do not transition status, assign work, add comments, or change priority unless the request authorizes it.
-- Use bounded subagents for parallel repository, Jira, or test audits when an Epic has substantial scope. Keep all Jira writes with one coordinator and verify every result.
+- Treat a request to create, update, transition, assign, comment on, or link Jira work as authorization to propose the write, not execute it. Do not write until the user approves the exact plan.
+- Start with the named issues and facts needed for the request. For a simple Jira copy, field, status, or relationship task, skip repository inspection unless it would change the answer.
+- When repository evidence is material, locate the root and follow its `AGENTS.md`; read `service_description.md` when present, then inspect only the relevant implementation, tests, configuration, branch state, or recent history. Do not scan the entire repository by default, and stop when the evidence is sufficient.
+- For a suspected Bug, distinguish verified behavior from a hypothesis and capture only the reproduction conditions, actual and expected behavior, impact, evidence, and likely regression coverage.
 
-### 2. Build repository context
+## 2. Inspect Jira precisely
 
-- Locate the repository root and read its `AGENTS.md`.
-- Look for `service_description.md` at the repository root. Read it before planning, analysis, or ticket work when present and treat it as the primary service overview.
-- Inspect the relevant implementation, tests, configuration, current branch, working-tree state, and recent PR or commit evidence.
-- Search for existing endpoints, models, telemetry, tests, TODOs, and failure handling before proposing work.
-- For a suspected Bug, capture reproducible behavior, expected behavior, evidence, affected scope, and likely regression coverage. Distinguish a verified defect from a hypothesis.
-- Treat code presence as evidence, not proof of release or completion. Reconcile it with tests, PR state, deployment evidence, and Jira status.
-- Preserve user changes in a dirty worktree. Do not modify the repository merely to groom Jira.
+- Prefer the configured `jira` CLI for exact reads and all writes. Use Atlassian search for broad discovery only when needed; do not use a browser when a CLI or connector can perform the action.
+- Use targeted JQL and exact reads for relevant parents, children, links, duplicates, comments, and neighboring work. Fetch independent details concurrently when useful, but keep dependent lookups sequential.
+- Search for overlap before creating an issue. Use a parent for hierarchy and Jira issue links for delivery relationships: `Blocks` for directional prerequisites, `Duplicate` for duplicates, and `Relates` for a meaningful non-directional association. Confirm the direction of `blocks` / `is blocked by` in raw readback.
+- Do not put Jira issue references or dependency lists in the Description or `Relevant Links`; create or update the first-class parent or issue link instead.
+- For commerce-board or service-repository conventions, read [Jira workflow example](references/jira-workflow-example.md) only when relevant.
 
-### 3. Inspect Jira
+## 3. Draft the smallest useful ticket
 
-- Use Atlassian Rovo search when available for broad discovery across Jira and Confluence.
-- Use targeted JQL and exact issue reads for the parent, children, linked blockers, duplicates, status, comments, and relevant neighboring Epics.
-- Separate discovery from detail retrieval: first identify exact issue keys with a parent, child, link, or search query. Once the keys are known, fetch independent issue details concurrently instead of waiting for each read to finish serially.
-- Use bounded parallelism, normally four to eight reads at a time, through Atlassian connector calls or parallel CLI invocations. Label every result by issue key, retain successful responses, and retry only failed or rate-limited reads.
-- Keep dependent lookups sequential when an earlier response determines later targets. Never parallelize Jira writes or their read-back verification; preserve the canary-and-verify sequence.
-- Prefer the configured `jira` CLI for exact Jira reads and all writes. Do not use a browser when the CLI or connector can perform the action.
-- Search for overlapping work before creating an issue. Model prerequisites, blockers, relationships, and duplicates with Jira issue links rather than a `Dependencies` description section.
-- Read [Jira workflow example](references/jira-workflow-example.md) for work on a commerce board or service repository.
+- Use [concise templates](references/templates.md), scaled to the work rather than a word target or fixed section count.
+- For small or well-understood work, prefer a one-sentence Description and one to three focused acceptance criteria. Add context only when it clarifies the contract, boundary, material failure path, rollout, or verification.
+- Let research improve judgment without copying every finding, operational property, test level, or linked-ticket requirement into the ticket. For sibling tickets, repeat only the shared boundary and add service-specific criteria only for unique gaps.
+- Prefer one broad maintenance or validation criterion over an inventory of possible defects and checks; name individual cases only when each changes acceptance.
+- Do not repeat acceptance criteria, links, implementation detail, history, or status narration in the Description. Omit empty sections and boilerplate such as `Dependencies`, `Removed from this Story`, dated reconciliation, or “impact reviewed” statements.
+- Keep non-Jira links only when they materially help execution, using short labels. Summarize the fact they support so the link is not the sole explanation.
+- Include only validation proportionate to the risk. Add E2E coverage when a material runtime outcome or lifecycle path cannot be established at a lower level; otherwise name the focused test or human check that is sufficient.
+- Add or change observability only when existing signals are insufficient for the runtime behavior. Prefer bounded metrics, traces, and structured PII-safe logs; keep high-cardinality identifiers out of metric tags. Do not add a generic observability criterion to every ticket.
 
-### 4. Create or improve ticket content
+## 4. Approve and execute writes
 
-- Use the concise formats in [templates](references/templates.md).
-- Start with one compact Description and the smallest set of acceptance criteria that determines whether the outcome is done. Add detail only to prevent a material ambiguity, ownership gap, or delivery risk.
-- Do not transfer every repository finding, operational property, test level, or linked ticket requirement into the description. Research should improve judgment without making the ticket a research report.
-- For sibling tickets with a shared outcome, keep the common criteria short. Add a service-specific criterion only when that service has a unique gap that must be resolved to complete this ticket.
-- Prefer one broad maintenance or validation criterion over an inventory of possible defects and checks. Name individual cases only when each one materially changes acceptance.
-- Use links for supporting or separately owned detail instead of restating it. State only the boundary or prerequisite the assignee needs to understand.
-- Keep exactly the useful current-state context. Make descriptions date agnostic; leave historical reconciliation to Jira history or an approved comment.
-- Do not add `Removed from this Story`, `Dependencies`, or dated reconciliation sections.
-- Put short, human-readable link labels in `Relevant Links`; never expose a long URL as its own label.
-- Omit the `Relevant Links` section when links do not materially help execution.
-- For a Bug, include reproduction conditions, actual behavior, expected behavior, impact, and evidence.
-- Include only the validation needed to establish the outcome and its material regression risk. Do not add generic evidence, documentation, rollout, or review criteria by default.
+- Present a compact `Jira write plan` with each target, exact field or link actions, and a short content preview only for text being changed. For a simple single-issue write, this can be one concise bullet. Mention unchanged fields only when that prevents ambiguity.
+- Ask the user to approve the plan. If the user changes it or execution reveals a material scope change, revise the plan and obtain approval again.
+- Before executing an approved write, read and follow the [Jira CLI runbook](references/jira-cli.md). Preserve existing description content that still matters because description edits replace the full body.
+- Never parallelize Jira writes or their verification. Use the smallest approved write as a canary before continuing a batch.
 
-### 5. Keep relevant E2E validation in the same ticket
+## 5. Verify and report concisely
 
-- Add an E2E acceptance criterion when a runtime feature, behavior change, or Bug fix has an important end-to-end outcome or regression risk that lower-level tests cannot establish.
-- Reuse the repository's existing E2E suite, clients, fixtures, environment conventions, and assertion patterns when discoverable.
-- Do not defer essential E2E coverage to an unspecified follow-up. If unusually broad execution belongs to a dedicated linked E2E ticket, retain the feature or Bug ticket's relevant E2E acceptance criteria and state the ownership split explicitly.
-- Do not add a generic `E2E impact reviewed` criterion to operational configuration, documentation, or other work where E2E coverage is plainly irrelevant. State an alternative only when the validation boundary could otherwise be misunderstood.
+- Read back every changed or created issue. Verify all changed fields plus identity and required fields; use raw output when parent, issue-link direction, comments, or metadata need confirmation.
+- Report the outcome, material exceptions, and readable Jira links. Do not restate the full plan, unchanged fields, or complete ticket bodies unless the user asks.
 
-### 6. Keep observability in the same ticket
+## 6. Hand off to code, GitHub, and CI
 
-- Add observability acceptance criteria when the work changes runtime behavior, telemetry, or an operational response and the required signal is not already obvious from the outcome.
-- Prefer a concise observable outcome. Enumerate metrics, trace attributes, logs, tags, and dashboards only when those details are necessary to avoid an incorrect implementation.
-- Keep high-cardinality identifiers such as request, session, customer, cart, checkout, and order IDs out of metric tags. Put correlation identifiers in traces and PII-safe log context.
-- Reuse the repository's existing telemetry abstractions and naming conventions when discoverable.
-- Add dashboard or alert changes only when the operational response requires them.
-- If work does not affect runtime behavior or telemetry, omit generic observability-impact wording rather than inventing a criterion.
-
-### 7. Plan and approve every Jira write
-
-- Complete repository and Jira inspection in a read-only planning phase before proposing any write.
-- Present a compact `Jira write plan` listing each target issue or proposed issue, the exact actions and fields to change, a concise description and acceptance-criteria preview, and any status, assignee, link, or comment changes.
-- State what will remain unchanged, surface only material decisions, and recommend a default when a choice is required.
-- Ask the user to approve the plan. Do not call any Jira write tool until the user explicitly confirms it.
-- If the user changes the plan, show the revised plan and obtain approval again. If execution uncovers a material scope change, stop and re-plan instead of improvising a different write.
-- For writes, read and follow [Jira CLI runbook](references/jira-cli.md).
-- Preserve existing description content that still matters because Jira description edits replace the full body.
-- Write the smallest approved issue first as the canary, then read it back before continuing a batch.
-
-### 8. Verify and report
-
-- Read back every changed or created issue in both human-readable and raw form.
-- Verify key, summary, issue type, status, parent, assignee, required custom fields, links, comments, and the complete saved description.
-- Report what changed, what remained unchanged, any decisions still needed, and evidence supporting status or repository findings.
-- Include readable Jira links in the handoff.
-
-### 9. Hand work to code, GitHub, and CI
-
-- Treat the approved Jira description and acceptance criteria as the implementation contract. Preserve the full Jira issue URL, summary, ownership boundaries, acceptance criteria, validation, observability, rollout, and dependency links in any implementation plan or work packet.
-- When implementation reveals a material mismatch in Jira scope, stop and propose a Jira update before silently implementing a different contract.
-- Require every Jira-backed pull request to contain the full Jira issue URL in its description plus a concise mapping from acceptance criteria to code and tests.
-- When the user approves publishing a Jira-backed change, include linking the resulting pull request URL back to Jira in the proposed write scope. Prefer a Jira remote link when supported; otherwise add one concise comment, then read it back.
-- Use GitHub check results as the first CI index. When a failed check points to Jenkins, use the Jenkins pipeline checker to collect the run URL, failing stage, decisive error, and verification result before recommending Jira or code changes.
-- Do not infer completion from an open pull request or a green unit test alone. Reconcile Jira status with pull request state, required checks, relevant end-to-end validation, deployment evidence, and operational verification.
+- Treat the approved Jira outcome and acceptance criteria as the implementation contract. If implementation reveals a material mismatch, propose a Jira update instead of silently changing scope.
+- Put the full Jira URL and a concise code/test mapping in Jira-backed pull requests. Link the PR back to Jira only within the approved write scope, preferring a remote link and otherwise one concise comment.
+- Use GitHub checks as the CI index. For Jenkins failures, collect the run URL, failing stage, decisive error, and verification result before recommending changes. Do not infer completion from code presence, an open PR, or a green unit test alone.
