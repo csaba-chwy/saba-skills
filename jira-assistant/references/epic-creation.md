@@ -9,6 +9,7 @@ Jira creates against a project key, not a board name. Inspect the target project
 - Make `flash-report-summary` one sentence about current intent or status; do not copy the Description.
 - Make `project-goal-and/or-learning-objective` one sentence with the intended measurable outcome or learning.
 - Use `YYYY-MM-DD` dates, an exact configured team/health option, and the shortest honest LOE value. Ask for missing values rather than inventing them.
+- Send the Description directly with `--body`; for multiline content, use `--template -` and provide it on standard input. Do not persist Jira content in session-specific or shared temporary files.
 
 ## Waffle-configured Epic profile
 
@@ -18,7 +19,7 @@ PDP Epic creation was verified on 2026-08-24 with this complete required set:
 | --- | --- |
 | Epic name | `--name` |
 | Summary | `--summary` |
-| Description | `--template` or `--body` |
+| Description | `--body` or `--template -` via standard input |
 | SFW Scrum Team | `--custom sfw-scrum-team=<exact option>` |
 | Start Date | `--custom start-date=YYYY-MM-DD` |
 | Target Date | `--custom target-date=YYYY-MM-DD` |
@@ -34,7 +35,7 @@ The slash in `project-goal-and/or-learning-objective` is part of the configured 
 jira epic create -pPDP \
   -n'Concise capability' \
   -s'Concise capability' \
-  --template /private/tmp/pdp-epic.md \
+  --body 'Deliver the concise outcome within the stated ownership boundary.' \
   --custom 'sfw-scrum-team=Product Detail Page' \
   --custom 'start-date=2026-08-24' \
   --custom 'target-date=2026-09-30' \
@@ -56,7 +57,7 @@ O11Y Epic creation was verified on 2026-08-24 to require `capitalizable` but non
 jira epic create -pO11Y \
   -n'Concise capability' \
   -s'Concise capability' \
-  --template /private/tmp/o11y-epic.md \
+  --body 'Deliver the concise outcome within the stated ownership boundary.' \
   --custom 'capitalizable=No' \
   --no-input
 ```
