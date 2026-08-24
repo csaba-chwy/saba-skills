@@ -54,7 +54,7 @@ jira issue create \
   --raw
 ```
 
-Create Epics with `jira epic create` and Bugs with `jira issue create -tBug`; verify their actual create screens and required custom fields first.
+Create Epics with `jira epic create` and read [Epic creation](epic-creation.md) for project-specific fields and CLI aliases. Create Bugs with `jira issue create -tBug`; verify the target project's actual create metadata and required custom fields first.
 
 If creation returns HTTP 400, search for the exact summary before retrying. Capture the key from a successful response and immediately read the issue back.
 
