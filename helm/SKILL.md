@@ -32,6 +32,25 @@ Use `kubectl get events -n <namespace> --sort-by=.lastTimestamp` for recent sche
 
 When an application label is available, prefer it to a guessed pod name. Helm releases commonly expose `app.kubernetes.io/instance=<release>` and `app.kubernetes.io/name=<application>`; verify labels before relying on them. If Helm reports no release but Kubernetes finds the workload, say that the application was found but Helm ownership was not established.
 
+## Application logs by environment and region
+
+For a request to read an application's logs given an environment and region:
+
+1. Select the matching AWS profile and locate the configured Kubernetes context containing both the requested environment and region. Confirm the exact context with `kubectl config get-contexts -o name`; do not construct or substitute a context name when there is no match.
+2. Discover the application with `AWS_PROFILE=<environment> kubectl --context <context> get deployment -A` or the Helm all-namespace release listing. If it appears in more than one namespace, present the candidates and ask the user to choose one; do not merge logs across namespaces.
+3. In the selected namespace, inspect the deployment's labels and pods before choosing a label selector. Read recent logs with the same profile, context, and namespace. If no time window is supplied, begin with `--since=30m --tail=200`, use `--prefix`, and name the container explicitly when the application has more than one. Use `--all-containers=true` only when the container is not yet known and identify the emitting container from the prefix.
+4. When a pod has restarted, read its previous container logs separately with `--previous`; keep current and previous output distinct. If there are no matching pods, report the deployment and pod state before widening the search.
+
+For example, after the namespace, selector, and container are confirmed:
+
+```bash
+AWS_PROFILE=<environment> kubectl --context <context> logs \
+  -n <namespace> -l '<verified-selector>' -c <container> \
+  --since=30m --tail=200 --prefix
+```
+
+State the profile, context, namespace, selector, containers, and time window used. Return only the decisive, redacted log lines and summarize their pattern; do not return a bulk log dump.
+
 ## Explain evidence and stop conditions
 
 Report the exact context, namespace, release or workload, and command-relevant time window. Distinguish observed facts from likely causes, and include the decisive pod condition, event, Helm revision, or short redacted log excerpt. Do not infer that an application is absent from one namespace, one resource type, or an empty Helm query.
