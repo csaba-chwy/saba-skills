@@ -1,0 +1,4 @@
+interface:
+  display_name: "Helm"
+  short_description: "Debug Helm-managed Kubernetes applications"
+  default_prompt: "Use $helm to diagnose this application in Kubernetes, starting with a read-only check of its Helm release, rollout, events, and relevant logs."
