@@ -10,6 +10,8 @@ Diagnose the requested application with Helm and kubectl, keeping the investigat
 ## Establish the target
 
 - Treat a Kubernetes **context** and a **namespace** as different things. A context selects a cluster and credentials; never pass a context name as `-n` unless it is also a confirmed namespace.
+- Select the AWS SSO profile from the target environment: use `stg` for staging contexts and `qat` for QAT contexts. Honor an explicitly supplied profile, but do not guess or fall back between environments. If the context does not make the environment clear, ask the user which profile to use.
+- Before contacting an EKS-backed context, authenticate and verify the selected profile: `aws sso login --profile <stg-or-qat>` followed by `aws sts get-caller-identity --profile <stg-or-qat>`. Run Kubernetes and Helm commands with that same profile, for example `AWS_PROFILE=<stg-or-qat> kubectl --context <context> ...` and `AWS_PROFILE=<stg-or-qat> helm --kube-context <context> ...`.
 - Confirm a supplied context with `kubectl config get-contexts -o name` and include `--context <context>` on every cluster command. If the supplied context is absent, report the available matching contexts and stop for user direction.
 - If no namespace is supplied, discover the release or workload across namespaces with `helm --kube-context <context> list --all-namespaces` or `kubectl --context <context> get deployment -A`; once found, use its exact namespace for deeper queries.
 - If discovery returns several similarly named workloads or releases, show their namespace, status, and age, then ask the user which is in scope before inspecting logs or manifests.
