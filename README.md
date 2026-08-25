@@ -15,6 +15,7 @@ The tracked files are environment-neutral. Instance URLs, credentials, and local
 | `service-catalog-mcp/` | Provides MCP tools that discover local services from their `service_description.md` files. |
 | `generate-service-description/` | Generates or refreshes concise, evidence-based `service_description.md` files for repositories. |
 | `code-review/` | Reviews GitHub pull requests in the reviewer's voice, validates runtime proof of testing, and publishes only user-approved comments. |
+| `helm/` | Diagnoses Helm-managed applications in Kubernetes through bounded, read-only release, rollout, event, and log investigation. |
 
 `one-shot-this` composes the other capabilities: it reads the executable contract from Jira, uses service descriptions and the catalog to identify affected repositories, preserves requirements in implementation packets and GitHub pull requests, and routes Jenkins-backed checks through the pipeline checker. Single-repository plans stay in the current session; only multi-repository plans start workers.
 
@@ -43,6 +44,7 @@ Each skill directory contains a `SKILL.md` entrypoint plus any scripts, referenc
 ├── jenkins-pipeline-checker/
 ├── one-shot-this/
 ├── code-review/
+├── helm/
 ├── service-catalog-mcp/
 └── generate-service-description/
 ```
@@ -83,6 +85,7 @@ ln -s /absolute/path/to/this-repository/jenkins-pipeline-checker ~/.codex/skills
 ln -s /absolute/path/to/this-repository/one-shot-this ~/.codex/skills/one-shot-this
 ln -s /absolute/path/to/this-repository/generate-service-description ~/.codex/skills/generate-service-description
 ln -s /absolute/path/to/this-repository/code-review ~/.codex/skills/code-review
+ln -s /absolute/path/to/this-repository/helm ~/.codex/skills/helm
 ```
 
 Restart or reload Codex after adding a skill so it can discover the new `SKILL.md`.
