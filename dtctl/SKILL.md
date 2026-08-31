@@ -26,6 +26,7 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 | “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query; bounded application-presence fallback only when empty |
 | “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; bounded entity fallback only when empty; one ranking only when failures exist |
 | “Any active problems?”, “what did Davis detect?”, “problem history” | Davis problem fast path | One entity query, then one bounded problem query |
+| “When did version X deploy?”, “when did this GitHub tag reach production?”, deployment question without a trusted timestamp | Version deployment fast path | One exact-version request timeline; preserve regional boundaries |
 | “Did this deployment/change cause a regression?” with a known timestamp | Change regression fast path | One before/after metric query; stop when thresholds are not exceeded |
 | “When did it spike?”, “by region/endpoint?”, “compare these windows” | One tailored metric timeline or comparison | One query first; no raw telemetry |
 | Root cause, exact RID/request/trace, logs, spans, or deployment symptoms | Standard investigation | Metric-first, then selective raw telemetry |
@@ -89,7 +90,7 @@ python3 scripts/src/run_service_error_summary.py \
   --lookback 1d
 ```
 
-The runner verifies the read-only context once and runs one request/failure query grouped by active service entity. When the tagged `service.name` selector returns nothing, it does not assume the service is absent: it performs a capped 15-minute span lookup by exact environment-qualified `k8s.workload.name`, then retries the metric query with every discovered `dt.entity.service`. Metric rows may also have null `service.name`; use the discovered workload name as their display identity. It stops when no failures exist; otherwise it runs one additional metric query that ranks failed requests by `endpoint.name` and `http.response.status_code`. It prints ready-to-send Markdown with exact counts, per-deployment rates, direct links to the native **Services > Failures** analysis for each active entity, and one reproducible DQL breakdown link.
+The runner verifies the read-only context once and runs one request/failure query grouped by active service entity. When the tagged `service.name` selector returns nothing, it does not assume the service is absent: it performs a capped 15-minute span lookup by exact environment-qualified `k8s.workload.name`, then retries the metric query with every discovered `dt.entity.service`. Metric rows may also have null `service.name`; use the discovered workload name as their display identity. It stops when no failures exist; otherwise it runs one additional metric query that ranks failed requests by `endpoint.name` and `http.response.status_code`. It prints ready-to-send Markdown with exact counts, per-entity rates, direct links to the native **Services > Failures** analysis for each active entity, and one reproducible DQL breakdown link. A service entity or region is not a deployment version; never label these rows as deployments.
 
 This is the default route for quick error analysis because it avoids raw log and span scans. Treat a missing HTTP status as unavailable metric enrichment, not as a successful request. Use the native Failure Analysis links for failed traces, contextual logs, outgoing calls, database failures, and comparison mode. Continue to the standard investigation only when the user asks why a specific failure occurred or the summary identifies a concrete incident that needs root-cause analysis.
 
@@ -112,10 +113,42 @@ instead of scanning the tenant. Return its stdout and stop unless the user asks
 to explain a specific problem. For that drill-down, read
 [references/davis-problems.md](references/davis-problems.md).
 
+## Version deployment fast path
+
+When the prompt includes a GitHub tag version or asks when a release actually
+reached an environment, locate deployment traffic through the existing request
+count metric before choosing a regression boundary:
+
+```bash
+python3 scripts/src/run_service_deployment_summary.py \
+  --environment prd --service sf-item \
+  --version 0.180.0 --lookback 14d
+```
+
+The runner filters `dt.service.request.count` by the exact
+`primary_tags.version` value and groups by `service.name` so regional rollouts
+remain separate. In validated Chewy telemetry, `primary_tags.version` carries
+the application version used by the corresponding GitHub tag (for example,
+`0.180.0`). Use the first nonzero request bucket as the observed traffic rollout
+boundary at the reported interval precision. This is stronger evidence of when
+the deployed code began serving requests than an assumed timestamp, a service
+entity creation time, or an unversioned traffic change.
+
+Do not call an artifact publish time, PR merge time, GitHub tag creation time,
+pod start time, or midpoint in a metric change the deployment time unless the
+user explicitly asks about that event. State that the request metric proves the
+first observed traffic for the exact version, not the precise orchestration
+start. Treat staggered regional boundaries separately. An empty exact-version
+series is inconclusive: confirm the literal tag value and widen the bounded
+lookback before saying that the version was not observed; never turn it into a
+claim that the deployment or workload did not exist.
+
 ## Change regression fast path
 
 When a deployment, release, configuration change, or experiment timestamp is
-known, compare equal guarded windows with one metric query:
+known, compare equal guarded windows with one metric query. For a versioned
+deployment, “known” means the boundary came from the version deployment fast
+path or another explicit deployment event—not an inferred traffic midpoint:
 
 ```bash
 python3 scripts/src/run_service_regression.py \
@@ -129,8 +162,8 @@ error-rate increases over one percentage point, or request-volume drops over
 20%. Return its stdout and stop when thresholds are not exceeded or data is
 insufficient. Only after a detected regression should a follow-up rank endpoints
 or inspect a representative trace. If no trustworthy change timestamp exists,
-obtain it from deployment evidence; do not invent a midpoint and call it a
-deployment boundary.
+obtain it from exact `primary_tags.version` request traffic when available; do
+not invent a midpoint and call it a deployment boundary.
 
 ## Focused metric trend or breakdown
 
@@ -142,7 +175,7 @@ For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 
 1. Fix the environment, service, absolute window, and user timezone once.
 2. Read [mappings.md](mappings.md) only to normalize the target, then read only its linked service note and [references/query-strategy.md](references/query-strategy.md). For novel DQL, also read [references/dql-authoring.md](references/dql-authoring.md).
-3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window.
+3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window. When deployment timing matters, group or filter that metric by the exact `primary_tags.version` before selecting the boundary.
 4. Query only the logs or spans needed to answer the explicit question. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
 5. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.
 6. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, concise conclusions, and links beside the claims they support.

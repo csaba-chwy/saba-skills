@@ -93,7 +93,27 @@ python3 scripts/src/run_service_error_summary.py \
   --lookback 1d
 ```
 
-The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
+The script reports total and per-service-entity request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. Service entity rows represent active regional services, not deployment versions. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
+
+## Locate a version deployment from request traffic
+
+Find when a GitHub-tagged application version first served requests in each
+region:
+
+```bash
+cd dtctl
+python3 scripts/src/run_service_deployment_summary.py \
+  --environment prd \
+  --service sf-item \
+  --version 0.180.0 \
+  --lookback 14d
+```
+
+The runner issues one exact-version `dt.service.request.count` timeline filtered
+by `primary_tags.version`. It reports the first nonzero request bucket separately
+for every regional `service.name` and links to the same timeline in Dynatrace.
+That bucket is evidence of when the version began serving traffic; it is not the
+artifact publish time or an exact pod-start timestamp.
 
 ## Quick Davis problem summary
 
@@ -115,7 +135,9 @@ a tenant-wide scan.
 
 ## Change regression check
 
-Compare equal service-metric windows around a known deployment or change:
+Compare equal service-metric windows around a known deployment or change. For a
+versioned deployment, obtain the boundary from the version-traffic workflow
+above instead of inferring it from an unversioned metric change:
 
 ```bash
 cd dtctl

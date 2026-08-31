@@ -245,7 +245,7 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         self.assertIn("metric_presence = requests", result)
         self.assertIn("fields error_rate, metric_presence", result)
 
-    def test_builds_service_error_totals_by_deployment(self) -> None:
+    def test_builds_service_error_totals_by_entity(self) -> None:
         result = build_service_error_totals_query(
             environment="prd",
             service="sf-item",
