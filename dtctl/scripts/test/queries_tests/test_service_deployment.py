@@ -4,10 +4,10 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from build_service_deployment_query import build_service_deployment_query
+from queries.service_deployment import build_service_deployment_query
 
 
 class BuildServiceDeploymentQueryTest(unittest.TestCase):
@@ -41,7 +41,7 @@ class BuildServiceDeploymentQueryTest(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(SRC_DIR / "build_service_deployment_query.py"),
+                str(SRC_DIR / "queries" / "service_deployment.py"),
                 "--environment",
                 "stg",
                 "--service",

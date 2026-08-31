@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from build_service_regression_query import build_service_regression_query
+from queries.service_regression import build_service_regression_query
 
 
 class BuildServiceRegressionQueryTest(unittest.TestCase):

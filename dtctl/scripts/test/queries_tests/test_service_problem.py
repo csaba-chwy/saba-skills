@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from build_service_problem_query import (
+from queries.service_problem import (
     build_service_entities_query,
     build_service_problems_query,
 )

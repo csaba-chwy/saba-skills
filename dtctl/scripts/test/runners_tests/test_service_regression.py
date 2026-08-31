@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from run_service_regression import (
+from runners.service_regression import (
     execute_regression_check,
     render_markdown,
     resolve_comparison_windows,

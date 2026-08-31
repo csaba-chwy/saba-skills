@@ -5,11 +5,17 @@ from __future__ import annotations
 
 import argparse
 import base64
-from pathlib import Path
 import re
 from urllib.parse import quote, urlencode
 
-from build_logs_events_link import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import add_dql_link_arguments
+from links.logs_events_link import (
     LOGS_EVENTS_PATH,
     normalize_dql,
     normalize_environment_url,
@@ -52,8 +58,7 @@ def parse_args() -> argparse.Namespace:
             "for exact metric DQL."
         )
     )
-    parser.add_argument("--environment-url", required=True)
-    parser.add_argument("--dql-file", required=True, type=Path)
+    add_dql_link_arguments(parser)
     return parser.parse_args()
 
 

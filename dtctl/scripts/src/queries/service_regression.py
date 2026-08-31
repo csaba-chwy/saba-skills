@@ -5,9 +5,18 @@ from __future__ import annotations
 
 import argparse
 
-from build_service_rundown_query import (
-    ENVIRONMENTS,
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_absolute_window_arguments,
+    add_latency_percentile_argument,
+    add_service_arguments,
     build_service_filter,
+    validate_latency_percentile,
     validate_service_window,
 )
 
@@ -51,8 +60,7 @@ def build_service_regression_query(
     """Return a single two-record before/after service comparison query."""
     validate_service_window(environment, service, before_start, before_end)
     validate_service_window(environment, service, after_start, after_end)
-    if not 1 <= latency_percentile <= 99:
-        raise ValueError("latency percentile must be between 1 and 99")
+    validate_latency_percentile(latency_percentile)
     service_filter = build_service_filter(environment, service)
     before = _window_query(
         label="before",
@@ -75,13 +83,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build one DQL query for a before/after service comparison."
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--before-start", required=True)
-    parser.add_argument("--before-end", required=True)
-    parser.add_argument("--after-start", required=True)
-    parser.add_argument("--after-end", required=True)
-    parser.add_argument("--latency-percentile", type=int, default=95)
+    add_service_arguments(parser)
+    add_absolute_window_arguments(parser, prefix="before")
+    add_absolute_window_arguments(parser, prefix="after")
+    add_latency_percentile_argument(parser)
     return parser.parse_args()
 
 

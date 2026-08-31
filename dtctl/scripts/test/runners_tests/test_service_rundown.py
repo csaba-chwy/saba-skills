@@ -8,10 +8,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from run_service_rundown import execute_rundown, render_markdown, resolve_window
+from runners.service_rundown import execute_rundown, render_markdown, resolve_window
 
 
 class FakeRunner:

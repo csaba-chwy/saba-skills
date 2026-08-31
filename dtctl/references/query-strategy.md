@@ -68,7 +68,7 @@ target service and window before widening the window or reporting a telemetry
 gap.
 
 ```bash
-python3 scripts/src/run_service_deployment_summary.py \
+python3 scripts/src/runners/service_deployment_summary.py \
   --environment prd \
   --service sf-item \
   --version 0.180.0 \
@@ -105,7 +105,7 @@ Use `dt.service.request.count` before raw logs or spans unless the user supplied
 For a basic service rundown or focused aggregate metric question, run the scalar workflow from the skill directory:
 
 ```bash
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -116,7 +116,7 @@ It performs context preflight, runs one scalar request/error/latency query, and 
 For a quick summary of what is failing, use the dedicated error runner instead of manually issuing totals, endpoint, region, log, and span queries:
 
 ```bash
-python3 scripts/src/run_service_error_summary.py \
+python3 scripts/src/runners/service_error_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -127,13 +127,13 @@ It aggregates request and failure totals across the logical service, preserves e
 Select only the requested measure for a focused question. This avoids calculating response-time percentiles for request-count questions or request/error measures for latency-only questions:
 
 ```bash
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd \
   --service sf-item \
   --lookback 1h \
   --metric requests
 
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd \
   --service sf-item \
   --lookback 1h \
@@ -144,7 +144,7 @@ python3 scripts/src/run_service_rundown.py \
 For a requested regional, endpoint, or time-series follow-up, build a bounded timeline with confirmed low-cardinality dimensions:
 
 ```bash
-python3 scripts/src/build_service_rundown_query.py \
+python3 scripts/src/queries/service_rundown.py \
   --environment prd \
   --service sf-item \
   --from-time 2026-08-20T20:00:00Z \
@@ -163,7 +163,7 @@ For a broad traffic or performance review, preserve metric arrays so Logs and Ev
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true | sort service.name asc, failed asc' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-Generate this successful timeline with `scripts/src/build_logs_events_graph_link.py`. For performance prompts, return time-bucketed latency percentile arrays at an explicit interval; for error-rate prompts, group request timelines by the confirmed `failed` dimension. Compute headline totals and rates from the returned arrays for prose without adding scalar reductions to the linked graph DQL. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
+Generate this successful timeline with `scripts/src/links/logs_events_graph_link.py`. For performance prompts, return time-bucketed latency percentile arrays at an explicit interval; for error-rate prompts, group request timelines by the confirmed `failed` dimension. Compute headline totals and rates from the returned arrays for prose without adding scalar reductions to the linked graph DQL. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
 
 For incident discovery, run the selective failure timeline and metric-catalog discovery concurrently after context/auth succeeds:
 
@@ -179,7 +179,7 @@ For short incidents use one-minute resolution; for day-scale windows use roughly
 
 Once a failure minute is known, query the root span immediately. When it returns a valid incident trace ID, stop and follow the top-level early-link rule before further drilldown.
 
-If metrics have no data, do not conclude that logs are absent or that the application does not exist. For a general rundown, let `run_service_rundown.py` perform its capped application-presence fallback. Otherwise probe the paired logical log selector, then retry with the environment-qualified workload name when enrichment is missing. An empty presence probe remains inconclusive; state the selector and window, then use the mapped telemetry stem, service note, and exact tagged workload before asking the user for another identifier or making any existence claim.
+If metrics have no data, do not conclude that logs are absent or that the application does not exist. For a general rundown, let `scripts/src/runners/service_rundown.py` perform its capped application-presence fallback. Otherwise probe the paired logical log selector, then retry with the environment-qualified workload name when enrichment is missing. An empty presence probe remains inconclusive; state the selector and window, then use the mapped telemetry stem, service note, and exact tagged workload before asking the user for another identifier or making any existence claim.
 
 ## Other bounded patterns
 

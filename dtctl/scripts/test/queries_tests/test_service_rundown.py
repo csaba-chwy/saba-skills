@@ -4,16 +4,16 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from build_service_rundown_query import (
+from queries.service_rundown import (
     build_rundown_query,
     build_scalar_rundown_query,
     build_service_error_totals_query,
     build_top_service_errors_query,
 )
-from build_logs_events_graph_link import build_graph_link
+from links.logs_events_graph_link import build_graph_link
 
 
 class BuildServiceRundownQueryTest(unittest.TestCase):
@@ -106,7 +106,7 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(SRC_DIR / "build_service_rundown_query.py"),
+                str(SRC_DIR / "queries" / "service_rundown.py"),
                 "--environment",
                 "prd",
                 "--service",
@@ -128,7 +128,7 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(SRC_DIR / "build_service_rundown_query.py"),
+                str(SRC_DIR / "queries" / "service_rundown.py"),
                 "--environment",
                 "prd",
                 "--service",

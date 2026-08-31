@@ -87,7 +87,7 @@ Run the repository's metric-first summary before scanning raw logs or spans:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_error_summary.py \
+python3 scripts/src/runners/service_error_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -101,7 +101,7 @@ Find when a Service Version first served requests in each region:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_deployment_summary.py \
+python3 scripts/src/runners/service_deployment_summary.py \
   --environment prd \
   --service sf-item \
   --version 0.180.0 \
@@ -124,7 +124,7 @@ query only matching Davis problems:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_problem_summary.py \
+python3 scripts/src/runners/service_problem_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -143,7 +143,7 @@ inferring it from an unversioned metric change:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_regression.py \
+python3 scripts/src/runners/service_regression.py \
   --environment prd \
   --service sf-item \
   --change-time 2026-08-20T14:30:00Z

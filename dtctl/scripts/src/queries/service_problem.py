@@ -6,7 +6,14 @@ from __future__ import annotations
 import argparse
 import re
 
-from build_service_rundown_query import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_absolute_window_arguments,
     build_service_filter,
     validate_absolute_window,
     validate_service_window,
@@ -93,8 +100,7 @@ def parse_args() -> argparse.Namespace:
         description="Build bounded DQL for a service-scoped Davis problem summary."
     )
     parser.add_argument("--entity-id", action="append", required=True)
-    parser.add_argument("--from-time", dest="start", required=True)
-    parser.add_argument("--to-time", dest="end", required=True)
+    add_absolute_window_arguments(parser)
     parser.add_argument("--status", choices=PROBLEM_STATUSES, default="all")
     parser.add_argument("--limit", type=int, default=10)
     return parser.parse_args()

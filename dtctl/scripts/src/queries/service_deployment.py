@@ -6,10 +6,18 @@ from __future__ import annotations
 import argparse
 import re
 
-from build_service_rundown_query import (
-    ENVIRONMENTS,
-    INTERVAL_RE,
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_absolute_window_arguments,
+    add_interval_argument,
+    add_service_arguments,
     build_service_filter,
+    validate_interval,
     validate_service_window,
 )
 
@@ -33,8 +41,7 @@ def build_service_deployment_query(
             "version must be an exact tag value using letters, digits, dots, "
             "underscores, plus signs, or hyphens"
         )
-    if not INTERVAL_RE.fullmatch(interval):
-        raise ValueError("interval must be a positive duration such as 1m, 5m, or 1h")
+    validate_interval(interval)
     service_filter = build_service_filter(environment, service)
     return "\n".join(
         (
@@ -58,12 +65,10 @@ def parse_args() -> argparse.Namespace:
             "Build one request-count timeline for an exact Service Version."
         )
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
+    add_service_arguments(parser)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--from-time", dest="start", required=True)
-    parser.add_argument("--to-time", dest="end", required=True)
-    parser.add_argument("--interval", default="5m")
+    add_absolute_window_arguments(parser)
+    add_interval_argument(parser, default="5m")
     return parser.parse_args()
 
 
