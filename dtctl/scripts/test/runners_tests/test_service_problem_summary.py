@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from run_service_problem_summary import execute_problem_summary, render_markdown
+from runners.service_problem_summary import execute_problem_summary, render_markdown
 
 
 class FakeRunner:

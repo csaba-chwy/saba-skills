@@ -9,21 +9,30 @@ import os
 import sys
 from typing import Mapping, Sequence
 
-from build_logs_events_link import build_link
-from build_service_problem_query import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_lookback_arguments,
+    add_service_arguments,
+    resolve_window,
+)
+from links.logs_events_link import build_link
+from queries.service_problem import (
     MAX_PROBLEMS,
     MAX_SERVICE_ENTITIES,
     PROBLEM_STATUSES,
     build_service_entities_query,
     build_service_problems_query,
 )
-from build_service_rundown_query import ENVIRONMENTS
-from run_service_rundown import (
+from runners.service_rundown import (
     CommandRunner,
     RundownError,
     _run,
     query_records,
-    resolve_window,
     verify_context,
 )
 
@@ -265,10 +274,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Summarize service-scoped Davis problems without raw log scans."
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--lookback", default="1d")
-    parser.add_argument("--end-time", help="Optional RFC 3339 end time.")
+    add_service_arguments(parser)
+    add_lookback_arguments(
+        parser,
+        default="1d",
+        end_time_help="Optional RFC 3339 end time.",
+    )
     parser.add_argument("--status", choices=PROBLEM_STATUSES, default="all")
     parser.add_argument("--limit", type=int, default=10)
     return parser.parse_args(argv)

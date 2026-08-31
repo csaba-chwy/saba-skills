@@ -12,22 +12,31 @@ import sys
 from typing import Mapping, Sequence
 from urllib.parse import quote
 
-from build_logs_events_link import build_link, normalize_environment_url
-from build_service_rundown_query import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_lookback_arguments,
+    add_service_arguments,
+    format_timestamp,
+    parse_timestamp,
+    resolve_window,
+)
+from links.logs_events_link import build_link, normalize_environment_url
+from queries.service_rundown import (
     ENTITY_ID_RE,
-    ENVIRONMENTS,
     MAX_ERROR_GROUPS,
     build_service_error_totals_query,
     build_top_service_errors_query,
 )
-from run_service_rundown import (
+from runners.service_rundown import (
     CommandRunner,
     RundownError,
     _run,
-    format_timestamp,
-    parse_timestamp,
     query_records,
-    resolve_window,
     verify_context,
 )
 
@@ -386,10 +395,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Summarize service failures by service entity, endpoint, and HTTP status."
         )
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--lookback", default="1d")
-    parser.add_argument("--end-time", help="Optional RFC 3339 end time for reproduction.")
+    add_service_arguments(parser)
+    add_lookback_arguments(parser, default="1d")
     parser.add_argument(
         "--top",
         type=int,

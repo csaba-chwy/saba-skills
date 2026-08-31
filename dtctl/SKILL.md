@@ -41,7 +41,7 @@ Use the bundled runner for broad health summaries and single aggregate request, 
 For a broad health summary, run from this skill directory:
 
 ```bash
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -51,12 +51,12 @@ For a focused aggregate question, select only what was asked; repeat `--metric` 
 
 ```bash
 # “How many requests did sf-item handle in production over the last hour?”
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd --service sf-item --lookback 1h \
   --metric requests
 
 # “What was its p99 latency?”
-python3 scripts/src/run_service_rundown.py \
+python3 scripts/src/runners/service_rundown.py \
   --environment prd --service sf-item --lookback 1h \
   --metric latency --latency-percentile 99
 ```
@@ -84,7 +84,7 @@ If authentication is unavailable, report the exact login command printed by the 
 Use the bundled error-summary runner when the user wants a quick explanation of what is failing, rather than only a failure count or a full root-cause investigation:
 
 ```bash
-python3 scripts/src/run_service_error_summary.py \
+python3 scripts/src/runners/service_error_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -102,7 +102,7 @@ Use the bundled problem runner for active problems, recent problem history, Davi
 root-cause results, or blast radius:
 
 ```bash
-python3 scripts/src/run_service_problem_summary.py \
+python3 scripts/src/runners/service_problem_summary.py \
   --environment prd --service sf-item --lookback 1d
 ```
 
@@ -120,7 +120,7 @@ reached an environment, locate deployment traffic through the existing request
 count metric before choosing a validation window:
 
 ```bash
-python3 scripts/src/run_service_deployment_summary.py \
+python3 scripts/src/runners/service_deployment_summary.py \
   --environment prd --service sf-item \
   --version 0.180.0 --lookback 14d
 ```
@@ -165,7 +165,7 @@ check alone.
    comparison:
 
    ```bash
-   python3 scripts/src/run_service_regression.py \
+   python3 scripts/src/runners/service_regression.py \
      --environment prd --service sf-item \
      --change-time 2026-08-20T14:30:00Z
    ```
@@ -193,7 +193,7 @@ check alone.
 
 ## Focused metric trend or breakdown
 
-For a time trend, region or endpoint breakdown, or comparison, stay metric-only. Read [references/query-strategy.md](references/query-strategy.md), use `scripts/src/build_service_rundown_query.py` with only the requested `--metric`, confirmed low-cardinality `--group-by` fields, and an explicit interval, then execute that single query. Use `scripts/src/build_logs_events_graph_link.py` for a time-series link. Stop unless the result gives a concrete reason for a deeper investigation.
+For a time trend, region or endpoint breakdown, or comparison, stay metric-only. Read [references/query-strategy.md](references/query-strategy.md), use `scripts/src/queries/service_rundown.py` with only the requested `--metric`, confirmed low-cardinality `--group-by` fields, and an explicit interval, then execute that single query. Use `scripts/src/links/logs_events_graph_link.py` for a time-series link. Stop unless the result gives a concrete reason for a deeper investigation.
 
 ## Standard investigation
 
@@ -229,6 +229,6 @@ For independent deep-investigation branches, read [references/parallel-investiga
 
 ## Evidence links
 
-Match the link destination to the evidence. Use `dtctl open intent` for app-native resources such as an exact trace or Synthetic monitor. Use `scripts/src/build_logs_events_link.py` for scalar metric summaries, logs, and other DQL record tables. Use `scripts/src/build_logs_events_graph_link.py` only when the user explicitly asks for a metric time trend. The graph helper preserves native time buckets and the time axis; never replace that visual evidence with a scalar table or client-rendered chart.
+Match the link destination to the evidence. Use `dtctl open intent` for app-native resources such as an exact trace or Synthetic monitor. Use `scripts/src/links/logs_events_link.py` for scalar metric summaries, logs, and other DQL record tables. Use `scripts/src/links/logs_events_graph_link.py` only when the user explicitly asks for a metric time trend. The graph helper preserves native time buckets and the time axis; never replace that visual evidence with a scalar table or client-rendered chart.
 
 Keep the entire workflow read-only; dashboards, notebooks, workflows, settings, extensions, buckets, and other Dynatrace resources stay unchanged.

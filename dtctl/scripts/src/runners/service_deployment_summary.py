@@ -10,17 +10,27 @@ import os
 import sys
 from typing import Mapping, Sequence
 
-from build_logs_events_graph_link import build_graph_link
-from build_service_deployment_query import build_service_deployment_query
-from build_service_rundown_query import ENVIRONMENTS
-from run_service_rundown import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_interval_argument,
+    add_lookback_arguments,
+    add_service_arguments,
+    format_timestamp,
+    parse_timestamp,
+    resolve_window,
+)
+from links.logs_events_graph_link import build_graph_link
+from queries.service_deployment import build_service_deployment_query
+from runners.service_rundown import (
     CommandRunner,
     RundownError,
     _run,
-    format_timestamp,
-    parse_timestamp,
     query_records,
-    resolve_window,
     verify_context,
 )
 
@@ -195,12 +205,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Locate first request traffic for an exact Service Version."
         )
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
+    add_service_arguments(parser)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--lookback", default="14d")
-    parser.add_argument("--end-time", help="Optional RFC 3339 end time for reproduction.")
-    parser.add_argument("--interval", default="5m")
+    add_lookback_arguments(parser, default="14d")
+    add_interval_argument(parser, default="5m")
     return parser.parse_args(argv)
 
 

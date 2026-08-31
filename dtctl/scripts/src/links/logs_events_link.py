@@ -5,8 +5,15 @@ from __future__ import annotations
 
 import argparse
 import base64
-from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import add_dql_link_arguments
 
 
 LOGS_EVENTS_PATH = "/ui/apps/dynatrace.classic.logs.events/ui/logs-events"
@@ -71,8 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build a Dynatrace Logs and Events Advanced-mode link for exact DQL."
     )
-    parser.add_argument("--environment-url", required=True)
-    parser.add_argument("--dql-file", required=True, type=Path)
+    add_dql_link_arguments(parser)
     return parser.parse_args()
 
 
