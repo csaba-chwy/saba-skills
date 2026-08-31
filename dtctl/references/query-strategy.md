@@ -50,6 +50,54 @@ Exact names can resolve to multiple active entities or traffic classes. Rank can
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1h, by:{dt.entity.service, service.name}, filter:{service.name == "EXACT-TAGGED-SERVICE"}, from:-24h | fields dt.entity.service, service.name, requests_total=arraySum(requests) | sort requests_total desc | limit 20' --fetch-timeout-seconds 60 -o json --plain
 ```
 
+## Locate Service Version rollout from request traffic
+
+When a Service Version is known but the deployment timestamp is not, use the
+exact `primary_tags.version` dimension on `dt.service.request.count`. Do not use
+a service entity ID as a version: an entity can continue serving across many
+releases. This was validated beyond the `sf-item` example: on 2026-08-31 every
+one of the 533 production `service.name` values with request traffic in the
+preceding 24 hours had a populated version series. Exact equality filters
+returned all 22 observed regional service/version pairs for the 11 logical
+services in `mappings.md`, including values such as `1.0.356-canary`,
+`1-cart-spa-release-20260826`, and `1-purchaseapp-release-20260819`.
+
+Treat that result as a coverage snapshot rather than a permanent schema
+guarantee. For a later empty result, discover the literal values present for the
+target service and window before widening the window or reporting a telemetry
+gap.
+
+```bash
+python3 scripts/src/run_service_deployment_summary.py \
+  --environment prd \
+  --service sf-item \
+  --version 0.180.0 \
+  --lookback 14d
+```
+
+The runner issues one bounded query equivalent to:
+
+```dql
+timeseries requests = sum(dt.service.request.count), interval: 5m,
+  by: { service.name, primary_tags.version },
+  filter: { startsWith(service.name, "[prd]")
+    and endsWith(service.name, "]sf-item")
+    and primary_tags.version == "0.180.0" },
+  from: "WINDOW-START", to: "WINDOW-END", nonempty: true
+| fields timeframe, interval, service.name, primary_tags.version, requests
+| sort service.name asc
+| limit 20
+```
+
+Use each regional series' first nonzero bucket as the observed traffic boundary
+for that version. Preserve its interval as the uncertainty bound; the rollout
+happened no later than the end of that bucket, but request telemetry alone does
+not prove the image publish time or exact pod start. If regions begin serving
+the version in different buckets, keep separate boundaries rather than choosing
+one tenant-wide midpoint. If the series is empty, verify the exact
+`primary_tags.version` values in the metric catalog and widen the bounded window
+before concluding only that the selector did not observe the version.
+
 ## Find traffic and failures cheaply
 
 Use `dt.service.request.count` before raw logs or spans unless the user supplied an exact trace/request ID and narrow window, or the service has no request-count metric.
@@ -125,7 +173,7 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 dtctl --context "$DT_CONTEXT" query 'metrics | filter metric.key == "dt.service.request.count" | filter startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM") | fields metric.key, failed, endpoint.name, dt.entity.service, service.name, dt.metrics.source | dedup service.name, failed, endpoint.name | sort service.name asc, failed desc, endpoint.name asc | limit 100' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-Use only dimensions returned by catalog discovery. The `failed` dimension represents failed service requests derived from spans, not ERROR log counts. `endpoint.name` can be an inbound operation, not a downstream service or subgraph.
+Use only dimensions returned by catalog discovery. The `failed` dimension represents failed service requests derived from spans, not ERROR log counts. `endpoint.name` can be an inbound operation, not a downstream service or subgraph. `primary_tags.version` identifies the deployed application version when populated; do not substitute `dt.entity.service` or `service.name` for it.
 
 For short incidents use one-minute resolution; for day-scale windows use roughly 15 minutes; for week-scale windows use one hour or coarser. Rank confirmed dimensions by total failures and include request volume when the question concerns a rate.
 

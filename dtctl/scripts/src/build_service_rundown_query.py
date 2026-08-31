@@ -224,7 +224,7 @@ def build_service_error_totals_query(
     end: str,
     entity_ids: tuple[str, ...] = (),
 ) -> str:
-    """Return request totals split by entity and native failed dimension."""
+    """Return request totals split by service entity and native failed dimension."""
     validate_service_window(environment, service, start, end)
     service_filter = build_service_selector(environment, service, entity_ids)
     return "\n".join(
