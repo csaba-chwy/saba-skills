@@ -192,7 +192,7 @@ def render_markdown(summary: DeploymentSummary) -> str:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Locate first request traffic for an exact service version tag."
+            "Locate first request traffic for an exact Service Version."
         )
     )
     parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)

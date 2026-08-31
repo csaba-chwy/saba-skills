@@ -1,6 +1,6 @@
 ---
 name: dtctl
-description: Answer Dynatrace service questions efficiently and investigate incidents with dtctl through read-only production and nonproduction contexts. Use for service health, request/error/latency checks, Davis problems, change regressions, trends, error diagnosis, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, and novel DQL authoring or repair.
+description: Answer Dynatrace service questions efficiently and investigate incidents with dtctl through read-only production and nonproduction contexts. Use for service health, request/error/latency checks, Davis problems, deployment validation, trends, error diagnosis, trace-to-log correlation, deployment symptoms, Kubernetes workload logs, and novel DQL authoring or repair.
 ---
 
 # Dynatrace investigation with dtctl
@@ -26,8 +26,8 @@ Choose the cheapest route that answers the prompt. Do not turn a general metric 
 | “How many requests/failures?”, “what is the error rate?”, “what is p95/p99?” | General metric fast path with only the requested measure | One scalar query; bounded application-presence fallback only when empty |
 | “Quick error summary,” “what is failing in this service?”, “summarize its errors” | Service error fast path | One totals query; bounded entity fallback only when empty; one ranking only when failures exist |
 | “Any active problems?”, “what did Davis detect?”, “problem history” | Davis problem fast path | One entity query, then one bounded problem query |
-| “When did version X deploy?”, “when did this GitHub tag reach production?”, deployment question without a trusted timestamp | Version deployment fast path | One exact-version request timeline; preserve regional boundaries |
-| “Did this deployment/change cause a regression?” with a known timestamp | Change regression fast path | One before/after metric query; stop when thresholds are not exceeded |
+| “When did Service Version X begin serving?”, deployment question without a trusted timestamp | Service Version timing fast path | One exact-version request timeline; preserve regional boundaries |
+| “Validate this deployment,” “is the deployment healthy?”, “did this deployment cause the issue?” | Deployment validation | Verify the Service Version rollout range, then metrics, traces, and logs |
 | “When did it spike?”, “by region/endpoint?”, “compare these windows” | One tailored metric timeline or comparison | One query first; no raw telemetry |
 | Root cause, exact RID/request/trace, logs, spans, or deployment symptoms | Standard investigation | Metric-first, then selective raw telemetry |
 | Write, fix, or optimize novel DQL | DQL authoring | Read only `references/dql-authoring.md`; execute once before verification |
@@ -113,11 +113,11 @@ instead of scanning the tenant. Return its stdout and stop unless the user asks
 to explain a specific problem. For that drill-down, read
 [references/davis-problems.md](references/davis-problems.md).
 
-## Version deployment fast path
+## Service Version timing fast path
 
-When the prompt includes a GitHub tag version or asks when a release actually
+When the prompt includes a Service Version or asks when a release actually
 reached an environment, locate deployment traffic through the existing request
-count metric before choosing a regression boundary:
+count metric before choosing a validation window:
 
 ```bash
 python3 scripts/src/run_service_deployment_summary.py \
@@ -128,42 +128,64 @@ python3 scripts/src/run_service_deployment_summary.py \
 The runner filters `dt.service.request.count` by the exact
 `primary_tags.version` value and groups by `service.name` so regional rollouts
 remain separate. In validated Chewy telemetry, `primary_tags.version` carries
-the application version used by the corresponding GitHub tag (for example,
-`0.180.0`). Use the first nonzero request bucket as the observed traffic rollout
-boundary at the reported interval precision. This is stronger evidence of when
+the Service Version (for example, `0.180.0`). Use the first nonzero request bucket
+as the observed traffic rollout boundary at the reported interval precision.
+This is stronger evidence of when
 the deployed code began serving requests than an assumed timestamp, a service
 entity creation time, or an unversioned traffic change.
 
-Do not call an artifact publish time, PR merge time, GitHub tag creation time,
-pod start time, or midpoint in a metric change the deployment time unless the
-user explicitly asks about that event. State that the request metric proves the
-first observed traffic for the exact version, not the precise orchestration
-start. Treat staggered regional boundaries separately. An empty exact-version
-series is inconclusive: confirm the literal tag value and widen the bounded
-lookback before saying that the version was not observed; never turn it into a
-claim that the deployment or workload did not exist.
+Do not call an artifact publish time, merge time, pod start time, or midpoint in
+a metric change the deployment time unless the user explicitly asks about that
+event. State that the request metric proves the first observed traffic for the
+exact Service Version, not the precise orchestration start. Treat staggered
+regional boundaries separately. The verified deployment range begins at the
+earliest regional first-request bucket and ends at the latest regional bucket
+end. An empty exact-version series is inconclusive: confirm the literal Service
+Version and widen the bounded lookback before saying that the version was not
+observed; never turn it into a claim that the deployment or workload did not
+exist.
 
-## Change regression fast path
+## Deployment validation
 
-When a deployment, release, configuration change, or experiment timestamp is
-known, compare equal guarded windows with one metric query. For a versioned
-deployment, “known” means the boundary came from the version deployment fast
-path or another explicit deployment event—not an inferred traffic midpoint:
+Validate a deployment with a verified rollout range and evidence from metrics,
+traces, and logs. Do not declare the service healthy from the metric threshold
+check alone.
 
-```bash
-python3 scripts/src/run_service_regression.py \
-  --environment prd --service sf-item \
-  --change-time 2026-08-20T14:30:00Z
-```
+1. Run the Service Version timing fast path. Report the earliest regional
+   first-request bucket through the latest regional bucket end as the observed
+   deployment range, while retaining each region's boundary. If another explicit
+   deployment event supplies the range, verify that versioned request traffic
+   overlaps it; never invent a midpoint from an unversioned traffic change.
+2. Compare guarded metric windows around each regional boundary. Use the bundled
+   runner when the regional boundaries overlap closely enough for one service-wide
+   comparison:
 
-The default compares 30 minutes before and after the change with a five-minute
-guard. It flags p95 latency increases over 20%, absolute p95 above 2 seconds,
-error-rate increases over one percentage point, or request-volume drops over
-20%. Return its stdout and stop when thresholds are not exceeded or data is
-insufficient. Only after a detected regression should a follow-up rank endpoints
-or inspect a representative trace. If no trustworthy change timestamp exists,
-obtain it from exact `primary_tags.version` request traffic when available; do
-not invent a midpoint and call it a deployment boundary.
+   ```bash
+   python3 scripts/src/run_service_regression.py \
+     --environment prd --service sf-item \
+     --change-time 2026-08-20T14:30:00Z
+   ```
+
+   The default compares 30 minutes before and after with a five-minute guard and
+   flags material request, error-rate, and p95-latency changes. For a staggered
+   rollout, run tailored region-filtered comparisons rather than collapsing the
+   boundaries.
+3. Read [references/raw-query-controls.md](references/raw-query-controls.md), then
+   inspect bounded root spans during and after the rollout. Include representative
+   successful traffic plus slow or failed traces. Identify the first failing span
+   and whether the failure originates in the deployed service or a downstream
+   call; do not attribute a downstream failure to the caller merely because its
+   request failed.
+4. Inspect bounded logs for the deployed workloads during and after each regional
+   boundary. Check new error signatures, crashes, restarts, and warnings, and use
+   exact trace, pod, and time evidence to correlate logs with the selected traces.
+   Inspect the implicated downstream workload's logs when a trace places the
+   originating failure there.
+5. Conclude healthy only when request volume, error rate, latency, representative
+   traces, and bounded logs are consistent after the rollout. Treat unavailable
+   telemetry as a validation gap, not evidence of health. Report the verified
+   deployment range, every signal checked, regional differences, and direct
+   Dynatrace links.
 
 ## Focused metric trend or breakdown
 
@@ -175,10 +197,11 @@ For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 
 1. Fix the environment, service, absolute window, and user timezone once.
 2. Read [mappings.md](mappings.md) only to normalize the target, then read only its linked service note and [references/query-strategy.md](references/query-strategy.md). For novel DQL, also read [references/dql-authoring.md](references/dql-authoring.md).
-3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window. When deployment timing matters, group or filter that metric by the exact `primary_tags.version` before selecting the boundary.
-4. Query only the logs or spans needed to answer the explicit question. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
-5. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.
-6. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, concise conclusions, and links beside the claims they support.
+3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window. For an error investigation, compare the failure onset with `primary_tags.version` transitions for the target service; temporal overlap is correlation, not proof of causation.
+4. Inspect a representative failed trace and find the first span where the error originates. If it is a downstream service, resolve that service and compare its failure onset with its own Service Version rollout range as well as the caller's. Keep caller symptoms distinct from downstream origin evidence.
+5. Query only the logs needed to test the target or downstream hypothesis. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
+6. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.
+7. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, the Service Versions and rollout ranges checked, concise conclusions, and links beside the claims they support.
 
 When a failed request yields a valid 32-character `trace.id`, immediately generate a bounded `dynatrace.distributedtracing/view-trace` intent link before continuing. Use the exact `trace.id` and incident timeframe; do not send exact-trace evidence to Logs and Events. Continue to query spans only when more analysis is needed:
 

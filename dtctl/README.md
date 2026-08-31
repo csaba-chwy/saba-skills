@@ -95,10 +95,9 @@ python3 scripts/src/run_service_error_summary.py \
 
 The script reports total and per-service-entity request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. Service entity rows represent active regional services, not deployment versions. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
 
-## Locate a version deployment from request traffic
+## Locate a Service Version rollout from request traffic
 
-Find when a GitHub-tagged application version first served requests in each
-region:
+Find when a Service Version first served requests in each region:
 
 ```bash
 cd dtctl
@@ -133,11 +132,11 @@ query. Use `--status active` for current problems. When request metrics cannot
 resolve a service entity, it skips the problem query rather than falling back to
 a tenant-wide scan.
 
-## Change regression check
+## Deployment validation
 
-Compare equal service-metric windows around a known deployment or change. For a
-versioned deployment, obtain the boundary from the version-traffic workflow
-above instead of inferring it from an unversioned metric change:
+Obtain the Service Version rollout range from the version-traffic workflow above,
+then compare equal service-metric windows around the verified boundary instead of
+inferring it from an unversioned metric change:
 
 ```bash
 cd dtctl
@@ -148,9 +147,10 @@ python3 scripts/src/run_service_regression.py \
 ```
 
 The runner uses one combined DQL query for request volume, failed requests,
-error rate, and p95 latency. It prints a threshold-based result and stops cleanly
-when there is no regression or insufficient data. Window, guard, percentile, and
-threshold values are configurable through CLI flags.
+error rate, and p95 latency. Window, guard, percentile, and threshold values are
+configurable through CLI flags. This is the metric portion of deployment
+validation; follow the top-level skill instructions to inspect bounded traces and
+logs before declaring the deployed service healthy.
 
 The DQL authoring and Davis problem guidance is selectively adapted from
 [Dynatrace for AI](https://github.com/Dynatrace/dynatrace-for-ai) at pinned

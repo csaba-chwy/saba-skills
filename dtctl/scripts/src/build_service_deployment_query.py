@@ -55,7 +55,7 @@ def build_service_deployment_query(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build one request-count timeline for an exact deployed version tag."
+            "Build one request-count timeline for an exact Service Version."
         )
     )
     parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)

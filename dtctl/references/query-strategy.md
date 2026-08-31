@@ -50,9 +50,9 @@ Exact names can resolve to multiple active entities or traffic classes. Rank can
 dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:1h, by:{dt.entity.service, service.name}, filter:{service.name == "EXACT-TAGGED-SERVICE"}, from:-24h | fields dt.entity.service, service.name, requests_total=arraySum(requests) | sort requests_total desc | limit 20' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-## Locate deployed versions from request traffic
+## Locate Service Version rollout from request traffic
 
-When a GitHub tag version is known but the deployment timestamp is not, use the
+When a Service Version is known but the deployment timestamp is not, use the
 exact `primary_tags.version` dimension on `dt.service.request.count`. Do not use
 a service entity ID as a version: an entity can continue serving across many
 releases.
