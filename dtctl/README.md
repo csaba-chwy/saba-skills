@@ -112,7 +112,10 @@ The runner issues one exact-version `dt.service.request.count` timeline filtered
 by `primary_tags.version`. It reports the first nonzero request bucket separately
 for every regional `service.name` and links to the same timeline in Dynatrace.
 That bucket is evidence of when the version began serving traffic; it is not the
-artifact publish time or an exact pod-start timestamp.
+artifact publish time or an exact pod-start timestamp. The dimension and exact
+filter were validated tenant-wide across all production services with request
+traffic in a recent bounded window, not only against the example service; the
+top-level skill records the verification scope and its limits.
 
 ## Quick Davis problem summary
 

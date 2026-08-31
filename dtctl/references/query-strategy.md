@@ -55,7 +55,17 @@ dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.
 When a Service Version is known but the deployment timestamp is not, use the
 exact `primary_tags.version` dimension on `dt.service.request.count`. Do not use
 a service entity ID as a version: an entity can continue serving across many
-releases.
+releases. This was validated beyond the `sf-item` example: on 2026-08-31 every
+one of the 533 production `service.name` values with request traffic in the
+preceding 24 hours had a populated version series. Exact equality filters
+returned all 22 observed regional service/version pairs for the 11 logical
+services in `mappings.md`, including values such as `1.0.356-canary`,
+`1-cart-spa-release-20260826`, and `1-purchaseapp-release-20260819`.
+
+Treat that result as a coverage snapshot rather than a permanent schema
+guarantee. For a later empty result, discover the literal values present for the
+target service and window before widening the window or reporting a telemetry
+gap.
 
 ```bash
 python3 scripts/src/run_service_deployment_summary.py \

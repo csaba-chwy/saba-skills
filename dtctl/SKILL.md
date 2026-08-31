@@ -127,9 +127,13 @@ python3 scripts/src/run_service_deployment_summary.py \
 
 The runner filters `dt.service.request.count` by the exact
 `primary_tags.version` value and groups by `service.name` so regional rollouts
-remain separate. In validated Chewy telemetry, `primary_tags.version` carries
-the Service Version (for example, `0.180.0`). Use the first nonzero request bucket
-as the observed traffic rollout boundary at the reported interval precision.
+remain separate. A tenant-wide production check on 2026-08-31 found a populated
+`primary_tags.version` series for all 533 `service.name` values with request
+traffic in the preceding 24 hours; exact filters also returned all 22 observed
+regional pairs across the 11 logical services in [mappings.md](mappings.md),
+including canary and release-date version formats. This is observed coverage,
+not a guarantee for future services or windows. Use the first nonzero request
+bucket as the observed traffic rollout boundary at the reported interval precision.
 This is stronger evidence of when
 the deployed code began serving requests than an assumed timestamp, a service
 entity creation time, or an unversioned traffic change.
