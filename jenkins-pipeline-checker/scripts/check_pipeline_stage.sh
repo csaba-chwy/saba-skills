@@ -5,6 +5,7 @@ PIPELINE="${1:-}"
 RUN_ID="${2:-}"
 STAGE_NAME="${3:-}"
 BRANCH_NAME="${4:-}"
+BASE_URL=""
 
 if [[ "$PIPELINE" =~ ^https?:// ]]; then
   BLUE_URL="$PIPELINE"
@@ -12,6 +13,7 @@ if [[ "$PIPELINE" =~ ^https?:// ]]; then
   PIPELINE="$(echo "$BLUE_URL" | sed -n 's#.*blue/organizations/[^/]\\+/\\([^/]*\\)/detail/\\([^/]*\\)/\\([^/]*\\)/pipeline.*#\\1#p')"
   BRANCH_NAME="$(echo "$BLUE_URL" | sed -n 's#.*blue/organizations/[^/]\\+/\\([^/]*\\)/detail/\\([^/]*\\)/\\([^/]*\\)/pipeline.*#\\2#p')"
   RUN_ID="$(echo "$BLUE_URL" | sed -n 's#.*blue/organizations/[^/]\\+/\\([^/]*\\)/detail/\\([^/]*\\)/\\([^/]*\\)/pipeline.*#\\3#p')"
+  BASE_URL="$(echo "$BLUE_URL" | sed -E 's#^(https?://[^/]+).*#\\1#')"
 fi
 
 if [[ -z "$PIPELINE" || -z "$RUN_ID" || -z "$STAGE_NAME" ]]; then
@@ -23,7 +25,14 @@ fi
 : "${JENKINS_USERNAME:?Set JENKINS_USERNAME in the environment}"
 : "${JENKINS_API_TOKEN:?Set JENKINS_API_TOKEN in the environment}"
 
-BASE_URL="${JENKINS_BASE_URL:?Set JENKINS_BASE_URL in the environment}"
+if [[ -z "$BASE_URL" ]]; then
+  if [[ "$BRANCH_NAME" =~ ^PR-[0-9]+$ ]]; then
+    BASE_URL="${JENKINS_NONPROD_BASE_URL:?Set JENKINS_NONPROD_BASE_URL in the environment for GitHub PR runs}"
+  else
+    BASE_URL="${JENKINS_PROD_BASE_URL:?Set JENKINS_PROD_BASE_URL in the environment for production runs}"
+  fi
+fi
+BASE_URL="${BASE_URL%/}"
 ORG="${JENKINS_ORG:-jenkins}"
 AUTH="${JENKINS_USERNAME}:${JENKINS_API_TOKEN}"
 
