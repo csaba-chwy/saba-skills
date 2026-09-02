@@ -27,7 +27,8 @@ The root `.env` is gitignored. Create it locally and replace every placeholder a
 JIRA_BASE_URL=https://jira.example.com
 
 # Jenkins Pipeline Checker
-JENKINS_BASE_URL=https://jenkins.example.com
+JENKINS_NONPROD_BASE_URL=https://jenkins-nonprod.example.com
+JENKINS_PROD_BASE_URL=https://jenkins.example.com
 JENKINS_USERNAME=your.name@example.com
 JENKINS_API_TOKEN=store-your-jenkins-api-token-here
 JENKINS_ORG=jenkins
@@ -104,7 +105,7 @@ jira me
 
 ### Jenkins (`jenkins-pipeline-checker`)
 
-Create a Jenkins API token from your Jenkins user security page. Set `JENKINS_BASE_URL`, `JENKINS_USERNAME`, and `JENKINS_API_TOKEN` in `.env`; `JENKINS_ORG` is optional and defaults to `jenkins`. The skill requires network access to the configured Jenkins instance.
+Create a Jenkins API token from your Jenkins user security page. Set `JENKINS_NONPROD_BASE_URL`, `JENKINS_PROD_BASE_URL`, `JENKINS_USERNAME`, and `JENKINS_API_TOKEN` in `.env`; `JENKINS_ORG` is optional and defaults to `jenkins`. GitHub links always attach to nonproduction Jenkins pipelines, so use `JENKINS_NONPROD_BASE_URL` for GitHub-linked checks. A full Blue Ocean URL may be used directly and preserves the environment encoded in the link.
 
 ### Dynatrace (`dtctl`)
 
@@ -159,7 +160,8 @@ For skill-content validation, run each skill’s canonical `quick_validate.py` w
 | Variable | Required by | Purpose | Where to set it |
 | --- | --- | --- | --- |
 | `JIRA_BASE_URL` | repository-wide context | Jira tenant URL; does not authenticate the Jira CLI | `.env` |
-| `JENKINS_BASE_URL` | `jenkins-pipeline-checker` | Jenkins instance URL | `.env` |
+| `JENKINS_NONPROD_BASE_URL` | `jenkins-pipeline-checker` | Nonproduction Jenkins instance URL; used for GitHub PR/check links | `.env` |
+| `JENKINS_PROD_BASE_URL` | `jenkins-pipeline-checker` | Production Jenkins instance URL | `.env` |
 | `JENKINS_USERNAME` | `jenkins-pipeline-checker` | Jenkins API username | `.env` |
 | `JENKINS_API_TOKEN` | `jenkins-pipeline-checker` | Jenkins API token | `.env` |
 | `JENKINS_ORG` | `jenkins-pipeline-checker` | Blue Ocean organization; defaults to `jenkins` | optional `.env` |
