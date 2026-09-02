@@ -12,22 +12,31 @@ import sys
 from typing import Mapping, Sequence
 from urllib.parse import quote
 
-from build_logs_events_link import build_link, normalize_environment_url
-from build_service_rundown_query import (
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_lookback_arguments,
+    add_service_arguments,
+    format_timestamp,
+    parse_timestamp,
+    resolve_window,
+)
+from links.logs_events_link import build_link, normalize_environment_url
+from queries.service_rundown import (
     ENTITY_ID_RE,
-    ENVIRONMENTS,
     MAX_ERROR_GROUPS,
     build_service_error_totals_query,
     build_top_service_errors_query,
 )
-from run_service_rundown import (
+from runners.service_rundown import (
     CommandRunner,
     RundownError,
     _run,
-    format_timestamp,
-    parse_timestamp,
     query_records,
-    resolve_window,
     verify_context,
 )
 
@@ -36,7 +45,7 @@ FAILURE_ANALYSIS_INTENT = "dynatrace.services/view-service-failure-analysis"
 
 
 @dataclass(frozen=True)
-class DeploymentErrors:
+class ServiceEntityErrors:
     service_name: str
     entity_id: str | None
     requests: int
@@ -69,18 +78,18 @@ class ServiceErrorSummary:
     start: str
     end: str
     lookback: str
-    deployments: tuple[DeploymentErrors, ...]
+    service_entities: tuple[ServiceEntityErrors, ...]
     discovered_services: tuple[DiscoveredService, ...]
     top_errors: tuple[ErrorGroup, ...]
     breakdown_link: str
 
     @property
     def requests(self) -> int:
-        return sum(deployment.requests for deployment in self.deployments)
+        return sum(entity.requests for entity in self.service_entities)
 
     @property
     def failures(self) -> int:
-        return sum(deployment.failures for deployment in self.deployments)
+        return sum(entity.failures for entity in self.service_entities)
 
     @property
     def error_rate(self) -> float:
@@ -140,7 +149,7 @@ def execute_error_summary(
         end=end,
     )
     total_records = query_records(runner, context, totals_dql)
-    deployments = _deployments_from_records(
+    service_entities = _service_entities_from_records(
         total_records,
         environment_url,
         start,
@@ -148,7 +157,7 @@ def execute_error_summary(
     )
     discovered_services: tuple[DiscoveredService, ...] = ()
     entity_ids: tuple[str, ...] = ()
-    if not deployments:
+    if not service_entities:
         discovery_start = format_timestamp(
             max(parse_timestamp(start), parse_timestamp(end) - timedelta(minutes=15))
         )
@@ -176,7 +185,7 @@ def execute_error_summary(
                 entity_ids=entity_ids,
             )
             total_records = query_records(runner, context, totals_dql)
-            deployments = _deployments_from_records(
+            service_entities = _service_entities_from_records(
                 total_records,
                 environment_url,
                 start,
@@ -194,7 +203,7 @@ def execute_error_summary(
         limit=top,
         entity_ids=entity_ids,
     )
-    total_failures = sum(deployment.failures for deployment in deployments)
+    total_failures = sum(entity.failures for entity in service_entities)
     top_records = (
         query_records(runner, context, breakdown_dql) if total_failures else []
     )
@@ -213,7 +222,7 @@ def execute_error_summary(
         start=start,
         end=end,
         lookback=lookback,
-        deployments=deployments,
+        service_entities=service_entities,
         discovered_services=discovered_services,
         top_errors=top_errors,
         breakdown_link=build_link(environment_url, breakdown_dql),
@@ -260,13 +269,13 @@ def _services_from_span_records(
     )
 
 
-def _deployments_from_records(
+def _service_entities_from_records(
     records: Sequence[Mapping[str, object]],
     environment_url: str,
     start: str,
     end: str,
     fallback_names: Mapping[str, str] | None = None,
-) -> tuple[DeploymentErrors, ...]:
+) -> tuple[ServiceEntityErrors, ...]:
     grouped: dict[tuple[str, str | None], list[int]] = {}
     for record in records:
         entity_id = _optional_string(record, "dt.entity.service")
@@ -289,7 +298,7 @@ def _deployments_from_records(
         if failed:
             counts[1] += requests
 
-    deployments = []
+    service_entities = []
     for (service_name, entity_id), (requests, failures) in grouped.items():
         link = (
             build_failure_analysis_link(
@@ -301,8 +310,8 @@ def _deployments_from_records(
             if entity_id and ENTITY_ID_RE.fullmatch(entity_id)
             else None
         )
-        deployments.append(
-            DeploymentErrors(
+        service_entities.append(
+            ServiceEntityErrors(
                 service_name=service_name,
                 entity_id=entity_id,
                 requests=requests,
@@ -311,7 +320,7 @@ def _deployments_from_records(
             )
         )
     return tuple(
-        sorted(deployments, key=lambda item: (-item.failures, item.service_name))
+        sorted(service_entities, key=lambda item: (-item.failures, item.service_name))
     )
 
 
@@ -321,7 +330,7 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
         f"`{summary.context}` · `{summary.start}` to `{summary.end}`",
         "",
     ]
-    if not summary.deployments:
+    if not summary.service_entities:
         if summary.discovered_services:
             found = ", ".join(
                 f"`{service.display_name}`" for service in summary.discovered_services
@@ -349,18 +358,18 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
         f"- Failed requests: **{summary.failures:,} / {summary.requests:,} "
         f"({summary.error_rate:.4f}%)**"
     )
-    lines.append("- Deployments:")
-    for deployment in summary.deployments:
+    lines.append("- Active service entities/regions:")
+    for entity in summary.service_entities:
         detail = (
-            f"{deployment.failures:,} / {deployment.requests:,} "
-            f"({deployment.error_rate:.4f}%)"
+            f"{entity.failures:,} / {entity.requests:,} "
+            f"({entity.error_rate:.4f}%)"
         )
-        if deployment.failure_analysis_link:
+        if entity.failure_analysis_link:
             detail += (
                 " — "
-                f"[open native Failure Analysis]({deployment.failure_analysis_link})"
+                f"[open native Failure Analysis]({entity.failure_analysis_link})"
             )
-        lines.append(f"  - `{deployment.service_name}`: {detail}")
+        lines.append(f"  - `{entity.service_name}`: {detail}")
 
     lines.extend(("", "Top failing endpoints/statuses:"))
     if summary.top_errors:
@@ -383,13 +392,11 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Summarize service failures by deployment, endpoint, and HTTP status."
+            "Summarize service failures by service entity, endpoint, and HTTP status."
         )
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--lookback", default="1d")
-    parser.add_argument("--end-time", help="Optional RFC 3339 end time for reproduction.")
+    add_service_arguments(parser)
+    add_lookback_arguments(parser, default="1d")
     parser.add_argument(
         "--top",
         type=int,

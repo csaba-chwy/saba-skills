@@ -6,10 +6,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from run_service_error_summary import (
+from runners.service_error_summary import (
     build_failure_analysis_link,
     execute_error_summary,
     render_markdown,

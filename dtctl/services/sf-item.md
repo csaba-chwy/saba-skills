@@ -1,5 +1,7 @@
 # `sf-item`
 
+Request-count metric enrichment was re-probed in production on 2026-08-31.
+
 - Preserve the target's exact environment and region tags in service and workload filters.
 - Prefer the resolved service entity ID for logs when it is selective and populated; confirm this enrichment in the target environment.
 - Inspect log-side `trace_id` and `span_id`. If both are populated, pivot by exact IDs; do not substitute the similarly named `trace.id` and `span.id` fields without checking them.

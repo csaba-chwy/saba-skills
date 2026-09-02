@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import json
 import os
 import re
@@ -13,16 +13,29 @@ import subprocess
 import sys
 from typing import Callable, Mapping, Sequence
 
-from build_logs_events_link import build_link, normalize_environment_url
-from build_service_rundown_query import (
-    ENVIRONMENTS,
+if __package__ in (None, ""):
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_latency_percentile_argument,
+    add_lookback_arguments,
+    add_service_arguments,
+    format_timestamp,
+    parse_timestamp,
+    resolve_window,
+    validate_environment,
+    validate_latency_percentile,
+)
+from links.logs_events_link import build_link, normalize_environment_url
+from queries.service_rundown import (
     RUNDOWN_METRICS,
     build_scalar_rundown_query,
     normalize_metrics,
 )
 
 
-DURATION_RE = re.compile(r"^([1-9][0-9]*)(m|h|d|w)$")
 CONTEXTS = {
     "prd": ("prod", "DTCTL_PROD_ENVIRONMENT"),
     "stg": ("nonprod", "DTCTL_NONPROD_ENVIRONMENT"),
@@ -90,48 +103,6 @@ def _run(command: Sequence[str], timeout: int) -> subprocess.CompletedProcess[st
         raise RundownError(f"command timed out after {timeout} seconds") from error
 
 
-def parse_duration(value: str) -> timedelta:
-    match = DURATION_RE.fullmatch(value)
-    if match is None:
-        raise ValueError("lookback must be a duration such as 30m, 6h, 1d, or 1w")
-    amount = int(match.group(1))
-    unit = match.group(2)
-    return {
-        "m": timedelta(minutes=amount),
-        "h": timedelta(hours=amount),
-        "d": timedelta(days=amount),
-        "w": timedelta(weeks=amount),
-    }[unit]
-
-
-def parse_timestamp(value: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise ValueError("end time must be an RFC 3339 timestamp") from error
-    if parsed.tzinfo is None:
-        raise ValueError("end time must include a UTC offset or Z suffix")
-    return parsed.astimezone(timezone.utc)
-
-
-def format_timestamp(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
-        "+00:00", "Z"
-    )
-
-
-def resolve_window(
-    lookback: str,
-    *,
-    end_time: str | None = None,
-    now: datetime | None = None,
-) -> tuple[str, str]:
-    duration = parse_duration(lookback)
-    end = parse_timestamp(end_time) if end_time else (now or datetime.now(timezone.utc))
-    end = end.astimezone(timezone.utc).replace(microsecond=0)
-    return format_timestamp(end - duration), format_timestamp(end)
-
-
 def _field(output: str, name: str) -> str | None:
     match = re.search(rf"(?m)^{re.escape(name)}:\s*(\S.*?)\s*$", output)
     return match.group(1).strip() if match else None
@@ -150,6 +121,7 @@ def verify_context(
     environ: Mapping[str, str],
     runner: CommandRunner,
 ) -> tuple[str, str]:
+    validate_environment(environment)
     context, variable = CONTEXTS[environment]
     configured_url = environ.get(variable, "")
     try:
@@ -417,8 +389,7 @@ def execute_rundown(
     latency_percentile: int = 95,
 ) -> Rundown | MetriclessRundown:
     selected_metrics = normalize_metrics(metrics)
-    if not 1 <= latency_percentile <= 99:
-        raise ValueError("latency percentile must be between 1 and 99")
+    validate_latency_percentile(latency_percentile)
     start, end = resolve_window(lookback, end_time=end_time, now=now)
     context, environment_url = verify_context(
         environment,
@@ -578,10 +549,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run one scalar request/error/latency rundown and print Markdown."
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--lookback", default="1d")
-    parser.add_argument("--end-time", help="Optional RFC 3339 end time for reproduction.")
+    add_service_arguments(parser)
+    add_lookback_arguments(parser, default="1d")
     parser.add_argument(
         "--metric",
         action="append",
@@ -589,7 +558,7 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Metric to include; repeat as needed. Defaults to all four.",
     )
-    parser.add_argument("--latency-percentile", type=int, default=95)
+    add_latency_percentile_argument(parser)
     return parser.parse_args()
 
 

@@ -9,16 +9,26 @@ import os
 import sys
 from typing import Mapping, Sequence
 
-from build_logs_events_link import build_link
-from build_service_regression_query import build_service_regression_query
-from build_service_rundown_query import ENVIRONMENTS
-from run_service_rundown import (
-    CommandRunner,
-    RundownError,
-    _run,
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_latency_percentile_argument,
+    add_service_arguments,
     format_timestamp,
     parse_duration,
     parse_timestamp,
+    validate_latency_percentile,
+)
+from links.logs_events_link import build_link
+from queries.service_regression import build_service_regression_query
+from runners.service_rundown import (
+    CommandRunner,
+    RundownError,
+    _run,
     query_records,
     verify_context,
 )
@@ -72,8 +82,8 @@ def resolve_comparison_windows(
     guard: str = "5m",
 ) -> ComparisonWindows:
     boundary = parse_timestamp(change_time)
-    window_delta = parse_duration(window)
-    guard_delta = parse_duration(guard)
+    window_delta = parse_duration(window, "window")
+    guard_delta = parse_duration(guard, "guard")
     if guard_delta >= window_delta:
         raise ValueError("guard must be shorter than the comparison window")
     before_end = boundary - guard_delta
@@ -154,8 +164,7 @@ def execute_regression_check(
     ):
         if value < 0:
             raise ValueError(f"{name} threshold cannot be negative")
-    if not 1 <= latency_percentile <= 99:
-        raise ValueError("latency percentile must be between 1 and 99")
+    validate_latency_percentile(latency_percentile)
 
     windows = resolve_comparison_windows(change_time, window=window, guard=guard)
     context, environment_url = verify_context(
@@ -293,12 +302,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check one service for a metric regression around a known change."
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
+    add_service_arguments(parser)
     parser.add_argument("--change-time", required=True)
     parser.add_argument("--window", default="30m")
     parser.add_argument("--guard", default="5m")
-    parser.add_argument("--latency-percentile", type=int, default=95)
+    add_latency_percentile_argument(parser)
     parser.add_argument("--latency-increase-pct", type=float, default=20.0)
     parser.add_argument("--latency-absolute-ms", type=float, default=2000.0)
     parser.add_argument("--error-rate-increase-pp", type=float, default=1.0)

@@ -4,15 +4,27 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import re
 
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
 
-ENVIRONMENTS = ("prd", "stg", "qat", "dev")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.parameters import (
+    add_absolute_window_arguments,
+    add_interval_argument,
+    add_latency_percentile_argument,
+    add_service_arguments,
+    build_service_filter,
+    validate_interval,
+    validate_latency_percentile,
+    validate_service_window,
+)
+
 RUNDOWN_METRICS = ("requests", "failures", "error-rate", "latency")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
-INTERVAL_RE = re.compile(r"^[1-9][0-9]*(?:ns|us|ms|s|m|h|d|w)$")
-SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ENTITY_ID_RE = re.compile(r"^SERVICE-[A-F0-9]{16}$")
 MAX_ERROR_GROUPS = 20
 
@@ -92,18 +104,6 @@ def _validate_additional_filter(value: str) -> str:
     return value.strip()
 
 
-def _parse_absolute_timestamp(value: str, name: str) -> datetime:
-    if any(char in value for char in ('"', "\n", "\r")):
-        raise ValueError(f"{name} must be an RFC 3339 timestamp")
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise ValueError(f"{name} must be an RFC 3339 timestamp") from error
-    if parsed.tzinfo is None:
-        raise ValueError(f"{name} must include a UTC offset or Z suffix")
-    return parsed
-
-
 def build_rundown_query(
     *,
     environment: str,
@@ -117,27 +117,15 @@ def build_rundown_query(
     metrics: tuple[str, ...] = (),
 ) -> str:
     """Return one link-ready metric timeline for the requested measures."""
-    if environment not in ENVIRONMENTS:
-        raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
-    if not SERVICE_RE.fullmatch(service):
-        raise ValueError("service must be an untagged telemetry stem")
-    parsed_start = _parse_absolute_timestamp(start, "start")
-    parsed_end = _parse_absolute_timestamp(end, "end")
-    if parsed_end <= parsed_start:
-        raise ValueError("end must be later than start")
-    if not INTERVAL_RE.fullmatch(interval):
-        raise ValueError("interval must be a positive DQL duration such as 5m or 1h")
-    if not 1 <= latency_percentile <= 99:
-        raise ValueError("latency percentile must be between 1 and 99")
+    validate_service_window(environment, service, start, end)
+    validate_interval(interval)
+    validate_latency_percentile(latency_percentile)
 
     dimensions = tuple(_validate_identifier(value) for value in group_by)
     extra_filters = tuple(
         _validate_additional_filter(value) for value in additional_filters
     )
-    service_filter = (
-        f'startsWith(service.name, "[{environment}]") and '
-        f'endsWith(service.name, "]{service}")'
-    )
+    service_filter = build_service_filter(environment, service)
     combined_filter = " and ".join((service_filter, *extra_filters))
     by_clause = f", by: {{ {', '.join(dimensions)} }}" if dimensions else ""
     dimension_fields = f", {', '.join(dimensions)}" if dimensions else ""
@@ -171,21 +159,10 @@ def build_scalar_rundown_query(
     metrics: tuple[str, ...] = (),
 ) -> str:
     """Return one scalar DQL query for the requested service measures."""
-    if environment not in ENVIRONMENTS:
-        raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
-    if not SERVICE_RE.fullmatch(service):
-        raise ValueError("service must be an untagged telemetry stem")
-    parsed_start = _parse_absolute_timestamp(start, "start")
-    parsed_end = _parse_absolute_timestamp(end, "end")
-    if parsed_end <= parsed_start:
-        raise ValueError("end must be later than start")
-    if not 1 <= latency_percentile <= 99:
-        raise ValueError("latency percentile must be between 1 and 99")
+    validate_service_window(environment, service, start, end)
+    validate_latency_percentile(latency_percentile)
 
-    service_filter = (
-        f'startsWith(service.name, "[{environment}]") and '
-        f'endsWith(service.name, "]{service}")'
-    )
+    service_filter = build_service_filter(environment, service)
     expressions, derived, fields = _metric_parts(
         metrics, latency_percentile=latency_percentile, scalar=True
     )
@@ -224,7 +201,7 @@ def build_service_error_totals_query(
     end: str,
     entity_ids: tuple[str, ...] = (),
 ) -> str:
-    """Return request totals split by entity and native failed dimension."""
+    """Return request totals split by service entity and native failed dimension."""
     validate_service_window(environment, service, start, end)
     service_filter = build_service_selector(environment, service, entity_ids)
     return "\n".join(
@@ -269,13 +246,6 @@ def build_top_service_errors_query(
     )
 
 
-def build_service_filter(environment: str, service: str) -> str:
-    return (
-        f'startsWith(service.name, "[{environment}]") and '
-        f'endsWith(service.name, "]{service}")'
-    )
-
-
 def build_service_selector(
     environment: str, service: str, entity_ids: tuple[str, ...]
 ) -> str:
@@ -294,27 +264,6 @@ def build_service_selector(
     )
 
 
-def validate_service_window(
-    environment: str,
-    service: str,
-    start: str,
-    end: str,
-) -> None:
-    if environment not in ENVIRONMENTS:
-        raise ValueError(f"environment must be one of: {', '.join(ENVIRONMENTS)}")
-    if not SERVICE_RE.fullmatch(service):
-        raise ValueError("service must be an untagged telemetry stem")
-    validate_absolute_window(start, end)
-
-
-def validate_absolute_window(start: str, end: str) -> None:
-    """Require a bounded, increasing pair of absolute RFC 3339 timestamps."""
-    parsed_start = _parse_absolute_timestamp(start, "start")
-    parsed_end = _parse_absolute_timestamp(end, "end")
-    if parsed_end <= parsed_start:
-        raise ValueError("end must be later than start")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -322,11 +271,9 @@ def parse_args() -> argparse.Namespace:
             "and latency percentile over time."
         )
     )
-    parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    parser.add_argument("--service", required=True)
-    parser.add_argument("--from-time", dest="start", required=True)
-    parser.add_argument("--to-time", dest="end", required=True)
-    parser.add_argument("--interval", default="15m")
+    add_service_arguments(parser)
+    add_absolute_window_arguments(parser)
+    add_interval_argument(parser, default="15m")
     parser.add_argument(
         "--group-by",
         action="append",
@@ -339,7 +286,7 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Pipeline-free DQL expression; repeat to narrow a follow-up.",
     )
-    parser.add_argument("--latency-percentile", type=int, default=95)
+    add_latency_percentile_argument(parser)
     parser.add_argument(
         "--metric",
         action="append",

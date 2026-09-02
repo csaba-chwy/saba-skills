@@ -28,10 +28,10 @@ Let the CLI add ordering; do not also embed `ORDER BY` inside JQL.
 
 ## Update
 
-Prepare a complete multiline body in a temporary file, then replace the description:
+Pass a short complete replacement directly with `--body`. For multiline content, provide the body on standard input without persisting Jira content in a session-specific or shared temporary file:
 
 ```text
-jira issue edit SHOP-123 --no-input < /private/tmp/shop-123-description.md
+jira issue edit SHOP-123 --body 'Complete replacement description' --no-input
 ```
 
 `jira issue edit` replaces the whole description. Retain current content that still matters and pass only fields intended to change. Do not use `--skip-notify` by default; a Jira instance can reject notification suppression even when ordinary writes are allowed.
@@ -48,13 +48,15 @@ jira issue create \
   -tStory \
   -PSHOP-98 \
   -s'Concise outcome-oriented summary' \
-  --template /private/tmp/issue-description.md \
+  --body 'Deliver the concise outcome within the stated boundary.' \
   --custom 'Capitalizable=Yes' \
   --no-input \
   --raw
 ```
 
-Create Epics with `jira epic create` and Bugs with `jira issue create -tBug`; verify their actual create screens and required custom fields first.
+For a multiline Description, use `--template -` and provide the content on standard input rather than writing it to a temporary file.
+
+Create Epics with `jira epic create` and read [Epic creation](epic-creation.md) for project-specific fields and CLI aliases. Create Bugs with `jira issue create -tBug`; verify the target project's actual create metadata and required custom fields first.
 
 If creation returns HTTP 400, search for the exact summary before retrying. Capture the key from a successful response and immediately read the issue back.
 

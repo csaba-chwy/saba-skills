@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from build_logs_events_link import build_link
+from links.logs_events_link import build_link
 
 
 class BuildLogsEventsLinkTest(unittest.TestCase):

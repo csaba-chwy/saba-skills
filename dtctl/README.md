@@ -87,13 +87,35 @@ Run the repository's metric-first summary before scanning raw logs or spans:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_error_summary.py \
+python3 scripts/src/runners/service_error_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
 ```
 
-The script reports total and per-deployment request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
+The script reports total and per-service-entity request failures, ranks the top endpoint/HTTP-status groups, and links each active service entity directly to native Failure Analysis for the exact absolute timeframe. Service entity rows represent active regional services, not deployment versions. On the normal path it uses one metric query when there are no failures and two when a ranking is needed. If the tagged `service.name` selector is empty, it performs a capped 15-minute workload-span lookup and retries by discovered service entity ID, so null `service.name` enrichment does not hide an active service. Use `--top 10` to expand the default five groups.
+
+## Locate a Service Version rollout from request traffic
+
+Find when a Service Version first served requests in each region:
+
+```bash
+cd dtctl
+python3 scripts/src/runners/service_deployment_summary.py \
+  --environment prd \
+  --service sf-item \
+  --version 0.180.0 \
+  --lookback 14d
+```
+
+The runner issues one exact-version `dt.service.request.count` timeline filtered
+by `primary_tags.version`. It reports the first nonzero request bucket separately
+for every regional `service.name` and links to the same timeline in Dynatrace.
+That bucket is evidence of when the version began serving traffic; it is not the
+artifact publish time or an exact pod-start timestamp. The dimension and exact
+filter were validated tenant-wide across all production services with request
+traffic in a recent bounded window, not only against the example service; the
+top-level skill records the verification scope and its limits.
 
 ## Quick Davis problem summary
 
@@ -102,7 +124,7 @@ query only matching Davis problems:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_problem_summary.py \
+python3 scripts/src/runners/service_problem_summary.py \
   --environment prd \
   --service sf-item \
   --lookback 1d
@@ -113,22 +135,25 @@ query. Use `--status active` for current problems. When request metrics cannot
 resolve a service entity, it skips the problem query rather than falling back to
 a tenant-wide scan.
 
-## Change regression check
+## Deployment validation
 
-Compare equal service-metric windows around a known deployment or change:
+Obtain the Service Version rollout range from the version-traffic workflow above,
+then compare equal service-metric windows around the verified boundary instead of
+inferring it from an unversioned metric change:
 
 ```bash
 cd dtctl
-python3 scripts/src/run_service_regression.py \
+python3 scripts/src/runners/service_regression.py \
   --environment prd \
   --service sf-item \
   --change-time 2026-08-20T14:30:00Z
 ```
 
 The runner uses one combined DQL query for request volume, failed requests,
-error rate, and p95 latency. It prints a threshold-based result and stops cleanly
-when there is no regression or insufficient data. Window, guard, percentile, and
-threshold values are configurable through CLI flags.
+error rate, and p95 latency. Window, guard, percentile, and threshold values are
+configurable through CLI flags. This is the metric portion of deployment
+validation; follow the top-level skill instructions to inspect bounded traces and
+logs before declaring the deployed service healthy.
 
 The DQL authoring and Davis problem guidance is selectively adapted from
 [Dynatrace for AI](https://github.com/Dynatrace/dynatrace-for-ai) at pinned

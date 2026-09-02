@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from build_logs_events_graph_link import build_graph_link
+from links.logs_events_graph_link import build_graph_link
 
 
 REGIONAL_TRAFFIC_DQL = """timeseries requests = sum(dt.service.request.count, filter: { startsWith(service.name, "[prd]") and endsWith(service.name, "]agentic-commerce-orchestrator") }), by: { service.name }, interval: 15m, from: "2026-08-19T20:33:13Z", to: "2026-08-20T20:33:13Z", nonempty: true

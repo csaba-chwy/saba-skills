@@ -25,6 +25,7 @@ description: "Read, search, summarize, create, update, and groom Jira work with 
 
 - Prefer the configured `jira` CLI for exact reads and all writes. Use Atlassian search for broad discovery only when needed; do not use a browser when a CLI or connector can perform the action.
 - Use targeted JQL and exact reads for relevant parents, children, links, duplicates, comments, and neighboring work. Fetch independent details concurrently when useful, but keep dependent lookups sequential.
+- Before creating an Epic, inspect the target project's Epic create metadata because required fields vary by project. Read [Epic creation](references/epic-creation.md) for Waffle-configured projects and a non-Waffle comparison; never copy Waffle-only fields to another project without metadata support.
 - Search for overlap before creating an issue. Use a parent for hierarchy and Jira issue links for delivery relationships: `Blocks` for directional prerequisites, `Duplicate` for duplicates, and `Relates` for a meaningful non-directional association. Confirm the direction of `blocks` / `is blocked by` in raw readback.
 - Do not put Jira issue references or dependency lists in the Description or `Relevant Links`; create or update the first-class parent or issue link instead.
 - For commerce-board or service-repository conventions, read [Jira workflow example](references/jira-workflow-example.md) only when relevant.

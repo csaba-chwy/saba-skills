@@ -13,9 +13,9 @@ Dynatrace documents the [Distributed Tracing app](https://docs.dynatrace.com/doc
 | Per-service failure patterns, traces, and contextual logs | Services Failure Analysis | `dynatrace.services/view-service-failure-analysis` |
 | Synthetic monitor identity, configuration, or current health | Synthetic monitor details | `dynatrace.synthetic/view-synthetic-monitor` |
 | Synthetic failures, performance, or run history | Synthetic executions | `dynatrace.synthetic/view-synthetic-monitor-executions` |
-| Bounded logs | Logs and Events Advanced-mode table | `scripts/src/build_logs_events_link.py` |
-| Metric time trend requested by the user | Existing time-series bar chart with time on the x-axis | `scripts/src/build_logs_events_graph_link.py` |
-| Scalar metric summary, ranking, or other DQL records | Logs and Events Advanced-mode table | `scripts/src/build_logs_events_link.py` |
+| Bounded logs | Logs and Events Advanced-mode table | `scripts/src/links/logs_events_link.py` |
+| Metric time trend requested by the user | Existing time-series bar chart with time on the x-axis | `scripts/src/links/logs_events_graph_link.py` |
+| Scalar metric summary, ranking, or other DQL records | Logs and Events Advanced-mode table | `scripts/src/links/logs_events_link.py` |
 | Another concrete Dynatrace resource | Its installed owning app | Discover with `dtctl get intents --app APP-ID` and verify with `dtctl describe intent APP-ID/INTENT-ID` |
 
 Do not use a query app merely because DQL found the resource. Discovery and evidence presentation are separate: use DQL to find an exact trace or monitor, then link the trace or monitor in its owning app. If the answer cites different evidence types, provide separate links beside the claims they support.
@@ -24,7 +24,7 @@ Do not use a query app merely because DQL found the resource. Discovery and evid
 
 Use the selected read-only context and `dtctl open intent` without `--browser`. It prints a tenant-correct AppShell URL and does not open the UI or change a Dynatrace resource.
 
-The bundled `run_service_error_summary.py` is the optimized exception for Services Failure Analysis links: after verifying the context URL, it locally encodes the installed intent's required `dt.entity.service` and bounded `dt.timeframe` payload. This avoids repeated intent-discovery calls while retaining tenant, entity, and timeframe validation.
+The bundled `scripts/src/runners/service_error_summary.py` is the optimized exception for Services Failure Analysis links: after verifying the context URL, it locally encodes the installed intent's required `dt.entity.service` and bounded `dt.timeframe` payload. This avoids repeated intent-discovery calls while retaining tenant, entity, and timeframe validation.
 
 ### Exact trace
 
@@ -90,7 +90,7 @@ Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plai
 For table evidence:
 
 ```bash
-python3 scripts/src/build_logs_events_link.py \
+python3 scripts/src/links/logs_events_link.py \
   --environment-url "$DT_ENV_URL" \
   --dql-file "$DQL_FILE"
 ```
@@ -98,7 +98,7 @@ python3 scripts/src/build_logs_events_link.py \
 For a requested metric trend:
 
 ```bash
-python3 scripts/src/build_logs_events_graph_link.py \
+python3 scripts/src/links/logs_events_graph_link.py \
   --environment-url "$DT_ENV_URL" \
   --dql-file "$DQL_FILE"
 ```
