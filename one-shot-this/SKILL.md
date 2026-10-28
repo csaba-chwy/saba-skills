@@ -40,12 +40,12 @@ Output a structured plan with:
 
 The full Jira URL, description, and acceptance criteria are required handoff fields. Map a criterion to specific repositories when ownership is narrower than the whole change. Do not generate work packets until the contract fields are present.
 Then ask for approval:
-- For exactly one repo: "Approve implementation, commits, push, draft PR, and Jira link-back in <repo> in this session?"
-- For two or more repos: "Approve work packets and workers to implement, commit, push, open draft PRs, and link them back to Jira?"
+- For exactly one repo: "Approve implementation, commits, push, and draft PR in <repo> in this session?"
+- For two or more repos: "Approve work packets and workers to implement, commit, push, and open draft PRs?"
 
 STOP if not approved.
 
-That approval covers the stated implementation, commits, branch push, draft-PR attempt, and Jira link-back. Do not ask for a second push/PR approval unless the approved scope materially changes.
+That approval covers the stated implementation, commits, branch push, and draft-PR attempt. Do not ask for a second push/PR approval unless the approved scope materially changes.
 
 ## Step 4A — Single repo: implement in the current session
 When the approved plan contains exactly one repo:
@@ -82,7 +82,7 @@ Only when the approved plan contains two or more repos:
   - If the status check fails after GitHub API access is available, tell the user: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Do not attempt PR creation.
   - If it is authenticated, write a temporary PR body containing the full Jira URL, acceptance-criteria mapping, implementation summary, tests, observability, and rollout notes. Open a non-interactive draft PR with `gh pr create --draft --base "${BASE_BRANCH:-main}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
   - If draft-PR creation fails after authentication, report the failure and branch name. Do not retry authentication or undo the pushed branch.
-- After a draft PR opens, link its URL back to Jira through the configured CLI or connector and read the saved link or comment back.
+- Do not post PR links to Jira comments or create Jira remote links as part of PR delivery unless the user explicitly requests it.
 - Inspect GitHub checks. When a check points to Jenkins, use `jenkins-pipeline-checker` rather than guessing from incomplete GitHub output.
 - When runtime or deployment verification requires Dynatrace logs, use `dtctl` only for a bounded, read-only query and retain the relevant time window and target in the evidence.
 - Report back with:
@@ -90,7 +90,6 @@ Only when the approved plan contains two or more repos:
   - commit SHA
   - push result
   - PR link
-  - Jira link-back result
   - tests run + results
   - GitHub/Jenkins check status and source URLs when available
   - any follow-ups/risks

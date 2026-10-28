@@ -41,7 +41,7 @@ TEMPLATE = """# Work Packet: {repo}
 {build_tool_note}
 
 ## Push and PR note
-- The approved work packet authorizes implementation, logical commits, a branch push, a draft-PR attempt, and Jira link-back. Do not ask for a second approval unless scope materially changes.
+- The approved work packet authorizes implementation, logical commits, a branch push, and a draft-PR attempt. Do not ask for a second approval unless scope materially changes.
 - Commit the completed implementation before publishing it. A pushed branch and draft PR cannot include uncommitted changes.
 - Push the current branch and establish `origin/<current-branch>` tracking:
   - `branch="$(git branch --show-current)"`
@@ -52,7 +52,7 @@ TEMPLATE = """# Work Packet: {repo}
   - If it fails after GitHub API access is available, report: `GitHub CLI is not authenticated. Run gh auth login -h github.com, then create a draft PR from <branch>.` Stop after reporting the pushed branch.
   - If it succeeds, write a temporary PR body containing the full Jira URL `{jira_url}`, acceptance-criteria mapping, implementation summary, tests, observability, and rollout notes. Create a non-interactive draft PR with `gh pr create --draft --base "${{BASE_BRANCH:-main}}" --head "$branch" --title "<JIRA_KEY>: <concise summary>" --body-file <path-to-body>`.
   - If PR creation fails, report the failure and leave the pushed branch intact. Do not retry authentication.
-- After the PR opens, link its URL back to Jira and read the saved link or comment back.
+- Do not post PR links to Jira comments or create Jira remote links as part of PR delivery unless the user explicitly requests it.
 - Inspect GitHub checks. If one points to Jenkins, use `jenkins-pipeline-checker` and retain the Jenkins run URL. If runtime verification needs Dynatrace logs, use `dtctl` only for a bounded, read-only query.
 
 ## Constraints
@@ -62,9 +62,9 @@ TEMPLATE = """# Work Packet: {repo}
 
 ## Definition of done
 - Tests pass
-- Branch pushed; draft PR opened with the Jira contract and linked back to Jira when GitHub CLI is already authenticated
+- Branch pushed; draft PR opened with the Jira contract when GitHub CLI is already authenticated
 - Relevant GitHub/Jenkins checks inspected or their pending state reported
-- Summary posted back (PR link, Jira link-back, changes, test and CI results, follow-ups)
+- Summary returned to the user (PR link, changes, test and CI results, follow-ups)
 """
 
 def bullet(lines):

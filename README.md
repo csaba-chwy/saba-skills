@@ -29,9 +29,9 @@ The skills are designed as one evidence chain:
 4. `one-shot-this` carries the full Jira URL and contract into each repository plan, work packet, branch, and draft PR.
 5. GitHub checks index CI. `jenkins-pipeline-checker` follows Jenkins-backed checks to the failing stage and returns a reusable evidence block with the run URL.
 6. When runtime or deployment verification requires logs, `dtctl` performs bounded, read-only Dynatrace investigation and returns the target and time window as evidence.
-7. The PR URL is linked back to Jira, and Jira status is reconciled against PR, CI, deployment, and operational evidence rather than code presence alone.
+7. Jira status is reconciled against PR, CI, deployment, and operational evidence rather than code presence alone.
 
-Handoffs should preserve source URLs instead of copying large external records. A Jira-backed PR must include the full Jira ticket URL; a Jira update for PR-backed work must include the PR URL.
+Handoffs should preserve source URLs instead of copying large external records. A Jira-backed PR must include the full Jira ticket URL. Do not post PR links to Jira comments or create Jira remote links as part of PR delivery unless the user explicitly requests it.
 
 ## Repository layout
 
