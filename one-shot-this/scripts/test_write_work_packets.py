@@ -60,7 +60,7 @@ class WriteWorkPacketsTest(unittest.TestCase):
         self.assertIn("https://jira.example.com/browse/SHOP-100", packet)
         self.assertIn("authorizes implementation, logical commits", packet)
         self.assertIn("gh auth status -h github.com", packet)
-        self.assertIn("link its URL back to Jira", packet)
+        self.assertIn("Do not post PR links to Jira comments or create Jira remote links", packet)
 
     def test_rejects_a_plan_without_full_jira_url(self):
         plan = {
