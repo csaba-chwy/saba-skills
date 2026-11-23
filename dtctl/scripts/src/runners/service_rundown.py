@@ -28,7 +28,9 @@ from common.parameters import (
     validate_environment,
     validate_latency_percentile,
 )
-from links.notebook_link import build_link, normalize_environment_url
+from links.common import normalize_environment_url
+from links.logs_events_link import build_link as build_log_link
+from links.notebook_link import build_link
 from queries.service_rundown import (
     RUNDOWN_METRICS,
     build_scalar_rundown_query,
@@ -353,7 +355,11 @@ def discover_application_telemetry(
                 discovery_start=discovery_start,
                 evidence=_application_evidence(records, source=source),
                 discovery_source=source,
-                link=build_link(environment_url, dql, title=f"{service} {source} presence"),
+                link=(
+                    build_log_link(environment_url, dql)
+                    if source == "logs"
+                    else build_link(environment_url, dql, title=f"{service} span presence")
+                ),
             )
 
     if len(discovery_errors) == 2:
@@ -505,7 +511,10 @@ def render_markdown(result: Rundown | MetriclessRundown) -> str:
                     f"- {item.source.title()}: **{item.records:,}** {record_label} for "
                     f"`{workload}`{latest}"
                 )
-            link_label = f"Open the exact {result.discovery_source} discovery query in Dynatrace Notebooks"
+            if result.discovery_source == "logs":
+                link_label = "Open the log evidence in Dynatrace Logs and Events"
+            else:
+                link_label = "Open the span discovery query in Dynatrace Notebooks"
         else:
             lines.append(
                 "The bounded 15-minute log and span discovery did not produce a "

@@ -25,7 +25,8 @@ from common.parameters import (
     parse_timestamp,
     resolve_window,
 )
-from links.notebook_link import build_link, normalize_environment_url
+from links.common import normalize_environment_url
+from links.notebook_link import build_link
 from queries.service_rundown import (
     ENTITY_ID_RE,
     MAX_ERROR_GROUPS,

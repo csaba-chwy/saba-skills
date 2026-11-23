@@ -1,10 +1,11 @@
+import base64
 import json
 import subprocess
 import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import unquote_plus, urlsplit
+from urllib.parse import parse_qs, unquote, unquote_plus, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -207,6 +208,15 @@ class RunServiceRundownTest(unittest.TestCase):
             'startsWith(k8s.workload.name, "[prd][")', query_commands[1][4]
         )
         self.assertIn("--default-scan-limit-gbytes", query_commands[1])
+        self.assertIn("Open the log evidence in Dynatrace Logs and Events", markdown)
+        link = urlsplit(result.link)
+        self.assertEqual(link.netloc, "prod.example.com")
+        self.assertEqual(link.path, "/ui/apps/dynatrace.classic.logs.events/ui/logs-events")
+        params = parse_qs(link.query)
+        self.assertEqual(params["advancedQueryMode"], ["true"])
+        self.assertEqual(params["visualizationType"], ["table"])
+        linked_dql = unquote(base64.b64decode(link.fragment).decode("utf-8"))
+        self.assertEqual(linked_dql, query_commands[1][4])
         self.assertIn("standard service metrics unavailable", markdown)
         self.assertIn("Application telemetry is present", markdown)
         self.assertIn("[prd][use1]agentic-commerce-orchestrator", markdown)
@@ -286,6 +296,11 @@ class RunServiceRundownTest(unittest.TestCase):
             query_commands[2][4],
         )
         self.assertIn("Spans: **1** sample record", markdown)
+        link = urlsplit(result.link)
+        self.assertEqual(link.path, "/ui/intent/dynatrace.notebooks/view-query")
+        payload = json.loads(unquote_plus(link.fragment))
+        self.assertEqual(payload["dt.query"], query_commands[2][4])
+        self.assertEqual(payload["visualization"], "table")
 
     def test_empty_bounded_discovery_is_explicitly_inconclusive(self) -> None:
         runner = EmptyMetricRunner()

@@ -204,7 +204,7 @@ For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window. For an error investigation, compare the failure onset with `primary_tags.version` transitions for the target service; temporal overlap is correlation, not proof of causation.
 4. Inspect a representative failed trace and find the first span where the error originates. If it is a downstream service, resolve that service and compare its failure onset with its own Service Version rollout range as well as the caller's. Keep caller symptoms distinct from downstream origin evidence.
 5. Query only the logs needed to test the target or downstream hypothesis. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
-6. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, DQL records to Notebooks tables, and time-series results to Notebooks line charts.
+6. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, bounded log proof to Logs and Events, and time-series results to Notebooks line charts.
 7. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, the Service Versions and rollout ranges checked, concise conclusions, and links beside the claims they support.
 
 When a failed request yields a valid 32-character `trace.id`, immediately generate a bounded `dynatrace.distributedtracing/view-trace` intent link before continuing. Use the exact `trace.id` and incident timeframe. Continue to query spans only when more analysis is needed:
@@ -229,6 +229,6 @@ For independent deep-investigation branches, read [references/parallel-investiga
 
 ## Evidence links
 
-Use [evidence-links.md](references/evidence-links.md) to return tenant-correct links. Route app-native resources such as an exact trace or Synthetic monitor to their owning app with `dtctl open intent`. Route scalar summaries, logs, and DQL records to Notebooks tables and time-series evidence to Notebooks line charts. Do not use Logs and Events links or tabs.
+Use [evidence-links.md](references/evidence-links.md) to return tenant-correct links. Route app-native resources such as an exact trace or Synthetic monitor to their owning app with `dtctl open intent`. Link bounded log proof to Logs and Events in Advanced mode. Use Notebooks line charts for time-series evidence. Use Notebooks tables for scalar metric summaries and other DQL records.
 
 Generate Notebooks query intent links in the selected read-only context. Link generation does not create, update, or share a saved notebook. Keep Dynatrace resources read-only throughout the investigation.
