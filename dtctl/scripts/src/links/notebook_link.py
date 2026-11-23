@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from urllib.parse import quote_plus
+from urllib.parse import quote
 
 if __package__ in (None, ""):
     import sys
@@ -32,7 +32,7 @@ def build_link(
     if line_chart:
         validate_timeseries(normalized_dql)
 
-    # Match dtctl open intent without an app-discovery call for every summary.
+    # Notebooks decodes the fragment as a URI component and expects spaces as %20.
     payload = json.dumps(
         {
             "dt.query": normalized_dql,
@@ -45,7 +45,7 @@ def build_link(
     )
     return (
         f"{normalize_environment_url(environment_url)}"
-        f"{NOTEBOOK_QUERY_PATH}#{quote_plus(payload, safe='')}"
+        f"{NOTEBOOK_QUERY_PATH}#{quote(payload, safe='')}"
     )
 
 

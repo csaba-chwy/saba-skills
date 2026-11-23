@@ -145,7 +145,7 @@ Do not add comments, scan-limit settings, secrets, full log content, or explanat
 - For an exact trace, confirm the path contains `/ui/intent/dynatrace.distributedtracing/view-trace` and the decoded fragment contains the exact `trace.id` and bounded timeframe.
 - For Synthetic, confirm the path contains the chosen `/ui/intent/dynatrace.synthetic/` intent and the decoded fragment contains the exact monitor ID and bounded timeframe.
 - For log proof, confirm the path is `/ui/apps/dynatrace.classic.logs.events/ui/logs-events` with `advancedQueryMode=true` and `visualizationType=table`. Base64-decode the fragment, URL-decode the result, and compare it to the exact bounded log DQL.
-- For a Notebooks table or line chart, confirm the path is `/ui/intent/dynatrace.notebooks/view-query`. Decode the fragment as URL-encoded JSON, compare `dt.query` to the exact multiline DQL, and confirm the title, `visualization` (`table` or `lineChart`), and `visualizationSettings.autoSelectVisualization` (`false`).
+- For a Notebooks table or line chart, confirm the path is `/ui/intent/dynatrace.notebooks/view-query`. Decode the fragment as a URI component with percent-encoded spaces (`%20`), compare `dt.query` to the exact multiline DQL, and confirm the title, `visualization` (`table` or `lineChart`), and `visualizationSettings.autoSelectVisualization` (`false`).
 - For a graph, also confirm an explicit interval, native arrays, and no `scalar:true` or `summarize` stage.
 - Retain observed values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
 

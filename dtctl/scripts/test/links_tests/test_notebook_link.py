@@ -2,7 +2,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from urllib.parse import unquote_plus, urlsplit
+from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -23,8 +23,9 @@ class BuildNotebookTableLinkTest(unittest.TestCase):
 
         self.assertEqual(parsed.netloc, "test.apps.dynatrace.com")
         self.assertEqual(parsed.path, "/ui/intent/dynatrace.notebooks/view-query")
+        self.assertIn("%20", parsed.fragment)
         self.assertEqual(
-            json.loads(unquote_plus(parsed.fragment)),
+            json.loads(unquote(parsed.fragment)),
             {
                 "dt.query": dql,
                 "title": "Logs",
@@ -39,7 +40,7 @@ class BuildNotebookTableLinkTest(unittest.TestCase):
             "fetch spans\r\n| limit 20\r\n",
             title="Spans",
         )
-        decoded_dql = json.loads(unquote_plus(urlsplit(result).fragment))["dt.query"]
+        decoded_dql = json.loads(unquote(urlsplit(result).fragment))["dt.query"]
 
         self.assertEqual(decoded_dql, "fetch spans\n| limit 20")
         with self.assertRaisesRegex(ValueError, "absolute https URL"):
@@ -55,15 +56,15 @@ class BuildNotebookTableLinkTest(unittest.TestCase):
                 title="Logs",
             )
 
-    def test_allows_pipe_characters_inside_quoted_values(self) -> None:
+    def test_preserves_special_characters_inside_quoted_values(self) -> None:
         dql = (
             "fetch logs\n"
-            "| filter contains(content, \"left | right\")\n"
+            "| filter contains(content, \"left + right | café\")\n"
             "| limit 20"
         )
 
         result = build_link("https://example.apps.dynatrace.com", dql, title="Logs")
-        decoded_dql = json.loads(unquote_plus(urlsplit(result).fragment))["dt.query"]
+        decoded_dql = json.loads(unquote(urlsplit(result).fragment))["dt.query"]
 
         self.assertEqual(decoded_dql, dql)
 
@@ -83,8 +84,9 @@ class BuildNotebookLineChartLinkTest(unittest.TestCase):
         parsed = urlsplit(result)
 
         self.assertEqual(parsed.path, "/ui/intent/dynatrace.notebooks/view-query")
+        self.assertIn("%20", parsed.fragment)
         self.assertEqual(
-            json.loads(unquote_plus(parsed.fragment)),
+            json.loads(unquote(parsed.fragment)),
             {
                 "dt.query": REGIONAL_TRAFFIC_DQL,
                 "title": "Requests per 15m by region",

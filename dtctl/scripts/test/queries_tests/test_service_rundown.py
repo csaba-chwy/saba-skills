@@ -3,7 +3,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
-from urllib.parse import unquote_plus, urlsplit
+from urllib.parse import unquote, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -166,7 +166,7 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
             line_chart=True,
         )
 
-        payload = json.loads(unquote_plus(urlsplit(result).fragment))
+        payload = json.loads(unquote(urlsplit(result).fragment))
         self.assertEqual(payload["visualization"], "lineChart")
         self.assertEqual(payload["dt.query"], dql)
 

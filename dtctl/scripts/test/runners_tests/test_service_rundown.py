@@ -5,7 +5,7 @@ import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, unquote_plus, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -116,7 +116,7 @@ class RunServiceRundownTest(unittest.TestCase):
         self.assertIn("0.0782%", markdown)
         self.assertIn("7.20 ms", markdown)
         self.assertIn("Dynatrace Notebooks", markdown)
-        payload = json.loads(unquote_plus(urlsplit(result.link).fragment))
+        payload = json.loads(unquote(urlsplit(result.link).fragment))
         self.assertEqual(payload["visualization"], "table")
         linked_dql = payload["dt.query"]
         self.assertIn('from: "2026-08-19T22:24:02Z"', linked_dql)
@@ -298,7 +298,7 @@ class RunServiceRundownTest(unittest.TestCase):
         self.assertIn("Spans: **1** sample record", markdown)
         link = urlsplit(result.link)
         self.assertEqual(link.path, "/ui/intent/dynatrace.notebooks/view-query")
-        payload = json.loads(unquote_plus(link.fragment))
+        payload = json.loads(unquote(link.fragment))
         self.assertEqual(payload["dt.query"], query_commands[2][4])
         self.assertEqual(payload["visualization"], "table")
 
