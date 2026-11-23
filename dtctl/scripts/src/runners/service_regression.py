@@ -23,7 +23,7 @@ from common.parameters import (
     parse_timestamp,
     validate_latency_percentile,
 )
-from links.logs_events_link import build_link
+from links.notebook_link import build_link
 from queries.service_regression import build_service_regression_query
 from runners.service_rundown import (
     CommandRunner,
@@ -226,7 +226,7 @@ def execute_regression_check(
         error_rate_change_pp=error_rate_change,
         request_change_pct=request_change,
         reasons=tuple(reasons),
-        link=build_link(environment_url, dql),
+        link=build_link(environment_url, dql, title=f"{service} pre/post deployment metrics"),
     )
 
 
@@ -294,7 +294,7 @@ def render_markdown(summary: RegressionSummary) -> str:
                 "unless another window or signal was requested.",
             )
         )
-    lines.extend(("", f"[Open the exact comparison in Dynatrace]({summary.link})"))
+    lines.extend(("", f"[Open the exact comparison in Dynatrace Notebooks]({summary.link})"))
     return "\n".join(lines)
 
 

@@ -25,7 +25,7 @@ from common.parameters import (
     parse_timestamp,
     resolve_window,
 )
-from links.logs_events_link import build_link, normalize_environment_url
+from links.notebook_link import build_link, normalize_environment_url
 from queries.service_rundown import (
     ENTITY_ID_RE,
     MAX_ERROR_GROUPS,
@@ -225,7 +225,7 @@ def execute_error_summary(
         service_entities=service_entities,
         discovered_services=discovered_services,
         top_errors=top_errors,
-        breakdown_link=build_link(environment_url, breakdown_dql),
+        breakdown_link=build_link(environment_url, breakdown_dql, title=f"{service} error breakdown"),
     )
 
 
@@ -349,7 +349,7 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
             (
                 status,
                 "",
-                f"[Open the exact error query in Dynatrace]({summary.breakdown_link})",
+                f"[Open the exact error query in Dynatrace Notebooks]({summary.breakdown_link})",
             )
         )
         return "\n".join(lines)
@@ -384,7 +384,7 @@ def render_markdown(summary: ServiceErrorSummary) -> str:
     else:
         lines.append("No failed endpoint groups were returned.")
     lines.extend(
-        ("", f"[Open the exact error breakdown in Dynatrace]({summary.breakdown_link})")
+        ("", f"[Open the exact error breakdown in Dynatrace Notebooks]({summary.breakdown_link})")
     )
     return "\n".join(lines)
 

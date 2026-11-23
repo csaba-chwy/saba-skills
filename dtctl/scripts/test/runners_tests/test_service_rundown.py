@@ -1,11 +1,10 @@
-import base64
 import json
 import subprocess
 import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote_plus, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -115,11 +114,10 @@ class RunServiceRundownTest(unittest.TestCase):
         self.assertIn("63,604", markdown)
         self.assertIn("0.0782%", markdown)
         self.assertIn("7.20 ms", markdown)
-        self.assertIn("visualizationType=table", markdown)
-        self.assertNotIn("barChart", markdown)
-        linked_dql = unquote(
-            base64.b64decode(urlsplit(result.link).fragment).decode("utf-8")
-        )
+        self.assertIn("Dynatrace Notebooks", markdown)
+        payload = json.loads(unquote_plus(urlsplit(result.link).fragment))
+        self.assertEqual(payload["visualization"], "table")
+        linked_dql = payload["dt.query"]
         self.assertIn('from: "2026-08-19T22:24:02Z"', linked_dql)
         self.assertIn('to: "2026-08-20T22:24:02Z"', linked_dql)
         self.assertIn("scalar: true", linked_dql)

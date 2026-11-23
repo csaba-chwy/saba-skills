@@ -20,7 +20,7 @@ from common.parameters import (
     add_service_arguments,
     resolve_window,
 )
-from links.logs_events_link import build_link
+from links.notebook_link import build_link
 from queries.service_problem import (
     MAX_PROBLEMS,
     MAX_SERVICE_ENTITIES,
@@ -184,7 +184,7 @@ def execute_problem_summary(
             requested_status=status,
             entities=(),
             problems=(),
-            link=build_link(environment_url, entity_dql),
+            link=build_link(environment_url, entity_dql, title=f"{service} entity lookup"),
             problem_query_skipped=True,
         )
 
@@ -213,7 +213,7 @@ def execute_problem_summary(
         requested_status=status,
         entities=entities,
         problems=problems,
-        link=build_link(environment_url, problem_dql),
+        link=build_link(environment_url, problem_dql, title=f"{service} Davis problems"),
     )
 
 
@@ -230,7 +230,7 @@ def render_markdown(summary: ServiceProblemSummary) -> str:
                 "No request-count service entities matched this logical service. "
                 "The problem lookup was skipped to avoid a tenant-wide scan.",
                 "",
-                f"[Open the exact entity query in Dynatrace]({summary.link})",
+                f"[Open the exact entity query in Dynatrace Notebooks]({summary.link})",
             )
         )
         return "\n".join(lines)
@@ -266,7 +266,7 @@ def render_markdown(summary: ServiceProblemSummary) -> str:
             root_cause = problem.root_cause_name or problem.root_cause_id
             if root_cause:
                 lines.append(f"  - Davis root cause: `{root_cause}`")
-    lines.extend(("", f"[Open the exact problem query in Dynatrace]({summary.link})"))
+    lines.extend(("", f"[Open the exact problem query in Dynatrace Notebooks]({summary.link})"))
     return "\n".join(lines)
 
 

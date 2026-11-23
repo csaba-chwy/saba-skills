@@ -174,7 +174,7 @@ class RunServiceErrorSummaryTest(unittest.TestCase):
         self.assertIn("HTTP 500", markdown)
         self.assertEqual(markdown.count("open native Failure Analysis"), 2)
         self.assertIn("view-service-failure-analysis", markdown)
-        self.assertIn("visualizationType=table", markdown)
+        self.assertIn("/ui/intent/dynatrace.notebooks/view-query#", markdown)
 
     def test_skips_breakdown_query_when_no_failures_exist(self) -> None:
         runner = FakeRunner(failures=False)

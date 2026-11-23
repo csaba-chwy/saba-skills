@@ -157,13 +157,14 @@ python3 scripts/src/queries/service_rundown.py \
 
 Use only dimensions already confirmed for the metrics. Preserve those dimensions in each graph projection. Keep secrets and customer identifiers out of additional filters and output links.
 
-For a broad traffic or performance review, preserve metric arrays so Logs and Events Classic can render a time-series bar chart with time on the x-axis. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt, and select an explicit interval appropriate to the requested window:
+For a broad traffic or performance review, preserve metric arrays so Dynatrace Notebooks can render a line chart with time on the x-axis. Group by region-bearing `service.name` unless another low-cardinality dimension directly answers the prompt, and select an explicit interval appropriate to the requested window:
 
 ```bash
-dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true | sort service.name asc, failed asc' --fetch-timeout-seconds 60 -o json --plain
+dtctl --context "$DT_CONTEXT" query 'timeseries requests=sum(dt.service.request.count), interval:15m, by:{service.name, failed}, filter:{startsWith(service.name, "[ENVIRONMENT]") and endsWith(service.name, "]TELEMETRY-STEM")}, from:"WINDOW-START", to:"WINDOW-END", nonempty:true
+| sort service.name asc, failed asc' --fetch-timeout-seconds 60 -o json --plain
 ```
 
-Generate this successful timeline with `scripts/src/links/logs_events_graph_link.py`. For performance prompts, return time-bucketed latency percentile arrays at an explicit interval; for error-rate prompts, group request timelines by the confirmed `failed` dimension. Compute headline totals and rates from the returned arrays for prose without adding scalar reductions to the linked graph DQL. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
+Link the successful timeline with `scripts/src/links/notebook_link.py --line-chart` using the exact bounded DQL and a title describing the metric, interval, and grouping. Use `--metric latency` for a percentile in milliseconds and `--metric error-rate` for a percentage per bucket. Group request counts by `failed` when the question calls for separate successful and failed volumes. Compute headline totals and rates from the returned arrays for prose without adding scalar reductions to the linked graph DQL. Use separate graphs when request volume and latency/error-rate scales would obscure each other.
 
 For incident discovery, run the selective failure timeline and metric-catalog discovery concurrently after context/auth succeeds:
 
