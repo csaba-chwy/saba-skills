@@ -3,6 +3,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -93,7 +94,9 @@ class RunServiceDeploymentSummaryTest(unittest.TestCase):
             "2026-08-20T12:05:00Z",
         )
         self.assertIn("Treat different regional boundaries separately", markdown)
-        self.assertIn("visualizationType=barChart", markdown)
+        self.assertIn("/ui/intent/dynatrace.notebooks/view-query#", markdown)
+        payload = json.loads(unquote(urlsplit(summary.link).fragment))
+        self.assertEqual(payload["visualization"], "lineChart")
 
     def test_empty_result_does_not_claim_version_was_not_deployed(self) -> None:
         summary = execute_deployment_summary(

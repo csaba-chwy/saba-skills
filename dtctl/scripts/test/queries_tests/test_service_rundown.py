@@ -1,7 +1,9 @@
+import json
 import subprocess
 import sys
 import unittest
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -13,7 +15,7 @@ from queries.service_rundown import (
     build_service_error_totals_query,
     build_top_service_errors_query,
 )
-from links.logs_events_graph_link import build_graph_link
+from links.notebook_link import build_link
 
 
 class BuildServiceRundownQueryTest(unittest.TestCase):
@@ -157,12 +159,16 @@ class BuildServiceRundownQueryTest(unittest.TestCase):
             end="2026-08-20T21:37:11Z",
         )
 
-        result = build_graph_link(
+        result = build_link(
             "https://example.apps.dynatrace.com",
             dql,
+            title="SF Item service metrics",
+            line_chart=True,
         )
 
-        self.assertIn("visualizationType=barChart", result)
+        payload = json.loads(unquote(urlsplit(result).fragment))
+        self.assertEqual(payload["visualization"], "lineChart")
+        self.assertEqual(payload["dt.query"], dql)
 
     def test_builds_scalar_rundown_for_table_output(self) -> None:
         result = build_scalar_rundown_query(

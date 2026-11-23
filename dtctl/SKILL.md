@@ -75,7 +75,7 @@ Run the command with normal network and macOS Keychain access when the execution
 
 An empty metric series only proves that the metric selector had no points in that context and window. Never say or imply that an application, service, deployment, or workload does not exist based only on an empty metric, log, span, entity, or catalog query. State the selector and window that had no data, distinguish missing telemetry from nonexistence, and exhaust the supplied environment plus application identity before asking the user for another identifier.
 
-Never create local or inline telemetry visualizations. Do not invoke client-side visualization, image generation, HTML rendering, screenshots, or browser/UI work. When the user explicitly asks for a time trend, return a Dynatrace time-series link generated from the exact query.
+For a time trend, follow the focused metric route and return a native Dynatrace Notebooks line chart generated from the exact query.
 
 If authentication is unavailable, report the exact login command printed by the script and stop. The user can run that command manually; rerun the rundown after authentication succeeds.
 
@@ -193,7 +193,7 @@ check alone.
 
 ## Focused metric trend or breakdown
 
-For a time trend, region or endpoint breakdown, or comparison, stay metric-only. Read [references/query-strategy.md](references/query-strategy.md), use `scripts/src/queries/service_rundown.py` with only the requested `--metric`, confirmed low-cardinality `--group-by` fields, and an explicit interval, then execute that single query. Use `scripts/src/links/logs_events_graph_link.py` for a time-series link. Stop unless the result gives a concrete reason for a deeper investigation.
+For a time trend, region or endpoint breakdown, or comparison, stay metric-only. Read [references/query-strategy.md](references/query-strategy.md), use `scripts/src/queries/service_rundown.py` with only the requested `--metric`, confirmed low-cardinality `--group-by` fields, and an explicit interval, then execute that single query. For time-series results, build a Notebooks line chart link with `scripts/src/links/notebook_link.py --line-chart`. Give the chart a title that names the metric, unit or bucket interval, and grouping, and include the key observation beside the link. Stop unless the result gives a concrete reason for a deeper investigation.
 
 ## Standard investigation
 
@@ -204,10 +204,10 @@ For debugging, root cause, exact records, logs, traces, or deployment symptoms:
 3. Start with `dt.service.request.count` to locate traffic, failures, and the smallest useful incident window. For an error investigation, compare the failure onset with `primary_tags.version` transitions for the target service; temporal overlap is correlation, not proof of causation.
 4. Inspect a representative failed trace and find the first span where the error originates. If it is a downstream service, resolve that service and compare its failure onset with its own Service Version rollout range as well as the caller's. Keep caller symptoms distinct from downstream origin evidence.
 5. Query only the logs needed to test the target or downstream hypothesis. Read [references/raw-query-controls.md](references/raw-query-controls.md) before raw queries; read [references/trace-log-correlation.md](references/trace-log-correlation.md) only for correlation.
-6. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, logs to a log-query view, and metric trends to the existing time-series graph view.
+6. Generate source-native evidence links. Read [references/evidence-links.md](references/evidence-links.md), then route exact traces to Distributed Tracing, Synthetic monitors and executions to Synthetic, bounded log proof to Logs and Events, and time-series results to Notebooks line charts.
 7. Stop as soon as the evidence answers the question. Return observed values, the exact UTC window, the Service Versions and rollout ranges checked, concise conclusions, and links beside the claims they support.
 
-When a failed request yields a valid 32-character `trace.id`, immediately generate a bounded `dynatrace.distributedtracing/view-trace` intent link before continuing. Use the exact `trace.id` and incident timeframe; do not send exact-trace evidence to Logs and Events. Continue to query spans only when more analysis is needed:
+When a failed request yields a valid 32-character `trace.id`, immediately generate a bounded `dynatrace.distributedtracing/view-trace` intent link before continuing. Use the exact `trace.id` and incident timeframe. Continue to query spans only when more analysis is needed:
 
 ```dql
 fetch spans, from:"WINDOW-START", to:"WINDOW-END"
@@ -229,6 +229,6 @@ For independent deep-investigation branches, read [references/parallel-investiga
 
 ## Evidence links
 
-Match the link destination to the evidence. Use `dtctl open intent` for app-native resources such as an exact trace or Synthetic monitor. Use `scripts/src/links/logs_events_link.py` for scalar metric summaries, logs, and other DQL record tables. Use `scripts/src/links/logs_events_graph_link.py` only when the user explicitly asks for a metric time trend. The graph helper preserves native time buckets and the time axis; never replace that visual evidence with a scalar table or client-rendered chart.
+Use [evidence-links.md](references/evidence-links.md) to return tenant-correct links. Route app-native resources such as an exact trace or Synthetic monitor to their owning app with `dtctl open intent`. Link bounded log proof to Logs and Events in Advanced mode. Use Notebooks line charts for time-series evidence. Use Notebooks tables for scalar metric summaries and other DQL records.
 
-Keep the entire workflow read-only; dashboards, notebooks, workflows, settings, extensions, buckets, and other Dynatrace resources stay unchanged.
+Generate Notebooks query intent links in the selected read-only context. Link generation does not create, update, or share a saved notebook. Keep Dynatrace resources read-only throughout the investigation.

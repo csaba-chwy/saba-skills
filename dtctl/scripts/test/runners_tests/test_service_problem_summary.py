@@ -87,7 +87,7 @@ class RunServiceProblemSummaryTest(unittest.TestCase):
         self.assertIn("P-12345", markdown)
         self.assertIn("1 active", markdown)
         self.assertIn("Davis root cause", markdown)
-        self.assertIn("visualizationType=table", markdown)
+        self.assertIn("/ui/intent/dynatrace.notebooks/view-query#", markdown)
 
     def test_skips_tenant_wide_problem_query_without_service_entities(self) -> None:
         runner = FakeRunner(entities=False)

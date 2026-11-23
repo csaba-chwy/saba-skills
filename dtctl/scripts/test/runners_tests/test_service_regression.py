@@ -114,7 +114,7 @@ class RunServiceRegressionTest(unittest.TestCase):
         self.assertIn("Regression detected", markdown)
         self.assertIn("error rate increased", markdown)
         self.assertIn("request volume dropped", markdown)
-        self.assertIn("visualizationType=table", markdown)
+        self.assertIn("/ui/intent/dynatrace.notebooks/view-query#", markdown)
 
     def test_stops_cleanly_when_thresholds_are_not_exceeded(self) -> None:
         summary = execute_regression_check(

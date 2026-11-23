@@ -28,7 +28,9 @@ from common.parameters import (
     validate_environment,
     validate_latency_percentile,
 )
-from links.logs_events_link import build_link, normalize_environment_url
+from links.common import normalize_environment_url
+from links.logs_events_link import build_link as build_log_link
+from links.notebook_link import build_link
 from queries.service_rundown import (
     RUNDOWN_METRICS,
     build_scalar_rundown_query,
@@ -353,7 +355,11 @@ def discover_application_telemetry(
                 discovery_start=discovery_start,
                 evidence=_application_evidence(records, source=source),
                 discovery_source=source,
-                link=build_link(environment_url, dql),
+                link=(
+                    build_log_link(environment_url, dql)
+                    if source == "logs"
+                    else build_link(environment_url, dql, title=f"{service} span presence")
+                ),
             )
 
     if len(discovery_errors) == 2:
@@ -372,7 +378,7 @@ def discover_application_telemetry(
         discovery_start=discovery_start,
         evidence=(),
         discovery_source=None,
-        link=build_link(environment_url, metric_dql),
+        link=build_link(environment_url, metric_dql, title=f"{service} service metrics"),
     )
 
 
@@ -477,7 +483,7 @@ def execute_rundown(
             f"latency_p{latency_percentile}_ms",
             selected="latency" in selected_metrics,
         ),
-        link=build_link(environment_url, dql),
+        link=build_link(environment_url, dql, title=f"{service} service metrics"),
     )
 
 
@@ -505,14 +511,17 @@ def render_markdown(result: Rundown | MetriclessRundown) -> str:
                     f"- {item.source.title()}: **{item.records:,}** {record_label} for "
                     f"`{workload}`{latest}"
                 )
-            link_label = f"Open the exact {result.discovery_source} discovery query"
+            if result.discovery_source == "logs":
+                link_label = "Open the log evidence in Dynatrace Logs and Events"
+            else:
+                link_label = "Open the span discovery query in Dynatrace Notebooks"
         else:
             lines.append(
                 "The bounded 15-minute log and span discovery did not produce a "
                 "match. That result is inconclusive; resolve the mapped telemetry "
                 "stem or exact tagged workload before making an existence claim."
             )
-            link_label = "Open the exact standard-metric query"
+            link_label = "Open the exact standard-metric query in Dynatrace Notebooks"
         lines.extend(("", f"[{link_label}]({result.link})"))
         return "\n".join(lines)
 
@@ -541,7 +550,7 @@ def render_markdown(result: Rundown | MetriclessRundown) -> str:
                 "latency": f"p{result.latency_percentile} latency",
             }[metric]
             lines.append(f"- {label}: **unavailable**")
-    lines.extend(("", f"[Open the exact query in Dynatrace]({result.link})"))
+    lines.extend(("", f"[Open service metrics in Dynatrace Notebooks]({result.link})"))
     return "\n".join(lines)
 
 

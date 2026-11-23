@@ -13,9 +13,9 @@ Dynatrace documents the [Distributed Tracing app](https://docs.dynatrace.com/doc
 | Per-service failure patterns, traces, and contextual logs | Services Failure Analysis | `dynatrace.services/view-service-failure-analysis` |
 | Synthetic monitor identity, configuration, or current health | Synthetic monitor details | `dynatrace.synthetic/view-synthetic-monitor` |
 | Synthetic failures, performance, or run history | Synthetic executions | `dynatrace.synthetic/view-synthetic-monitor-executions` |
-| Bounded logs | Logs and Events Advanced-mode table | `scripts/src/links/logs_events_link.py` |
-| Metric time trend requested by the user | Existing time-series bar chart with time on the x-axis | `scripts/src/links/logs_events_graph_link.py` |
-| Scalar metric summary, ranking, or other DQL records | Logs and Events Advanced-mode table | `scripts/src/links/logs_events_link.py` |
+| Bounded log proof | Logs and Events Advanced-mode table | `scripts/src/links/logs_events_link.py` |
+| Time-series visualization | Notebooks DQL line chart with time on the x-axis | `scripts/src/links/notebook_link.py --line-chart` |
+| Scalar metric summary, ranking, or other non-log DQL records | Notebooks DQL table | `scripts/src/links/notebook_link.py` |
 | Another concrete Dynatrace resource | Its installed owning app | Discover with `dtctl get intents --app APP-ID` and verify with `dtctl describe intent APP-ID/INTENT-ID` |
 
 Do not use a query app merely because DQL found the resource. Discovery and evidence presentation are separate: use DQL to find an exact trace or monitor, then link the trace or monitor in its owning app. If the answer cites different evidence types, provide separate links beside the claims they support.
@@ -47,7 +47,7 @@ dtctl --context "$DT_CONTEXT" open intent \
   --plain
 ```
 
-Use the returned Distributed Tracing link as the primary trace evidence. A bounded `fetch spans` query may still be used to inspect or tabulate spans, but its Logs and Events link is not a substitute for the single-trace waterfall.
+Use the returned Distributed Tracing link as the primary trace evidence. Use bounded `fetch spans` queries when supporting span details are needed.
 
 For a trace set, use `dynatrace.distributedtracing/view-traces` with the installed intent schema. Supply a selective `dt.filter` and bounded `dt.timeframe`; do not fall back to an arbitrary log-query page.
 
@@ -83,11 +83,9 @@ Use the direct Synthetic link as primary evidence. Do not link the Smartscape di
 
 Delete every temporary payload after URL generation. Do not place customer data, captured headers, secrets, full log content, or sensitive selectors in an intent payload.
 
-## DQL table and graph links
+## Log proof in Logs and Events
 
-Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Never guess a hostname, reuse another context's URL, or cross the production boundary.
-
-For table evidence:
+Use the environment URL from `dtctl config describe-context "$DT_CONTEXT" --plain` as the tenant source. Link exact, bounded `fetch logs` evidence as a Logs and Events Advanced-mode table:
 
 ```bash
 python3 scripts/src/links/logs_events_link.py \
@@ -95,19 +93,34 @@ python3 scripts/src/links/logs_events_link.py \
   --dql-file "$DQL_FILE"
 ```
 
-For a requested metric trend:
+## Notebooks query links
+
+Use the same verified tenant URL for Notebooks. The helper encodes the `dynatrace.notebooks/view-query` intent so the reader can open the exact DQL in [Dynatrace Notebooks](https://docs.dynatrace.com/docs/analyze-explore-automate/dashboards-and-notebooks/notebooks). Generating the link is read-only.
+
+For scalar metrics or other non-log record evidence:
 
 ```bash
-python3 scripts/src/links/logs_events_graph_link.py \
+python3 scripts/src/links/notebook_link.py \
   --environment-url "$DT_ENV_URL" \
-  --dql-file "$DQL_FILE"
+  --dql-file "$DQL_FILE" \
+  --title "Checkout-B error breakdown"
 ```
 
-The graph helper keeps `visualizationType=barChart`, requires a native `timeseries` query with an explicit interval, and rejects `scalar:true` and `summarize`. This preserves the time axis and prevents visualization regressions. Do not redraw telemetry locally.
+For time-series evidence:
+
+```bash
+python3 scripts/src/links/notebook_link.py \
+  --environment-url "$DT_ENV_URL" \
+  --dql-file "$DQL_FILE" \
+  --title "Checkout-B requests per 5m by region" \
+  --line-chart
+```
+
+Use a descriptive title and metric aliases so readers can identify the values and series. Preserve the `timeframe` and `interval` fields for the time axis, and keep the dimensions used to distinguish series. Link separate charts for measures with different units or scales. The helper requires an explicit interval and rejects scalar or summarized DQL in line chart mode.
 
 ### Keep DQL readable
 
-Write the data-source command on the first line and every pipeline command on its own subsequent line. Preserve the newlines in executed commands, temporary files, and encoded links. The link builders reject inline pipeline chains.
+Write the data-source command on the first line and every pipeline command on its own subsequent line. Preserve the newlines in executed commands, temporary files, and encoded links. The link builder rejects inline pipeline chains.
 
 ```dql
 fetch logs, from:"2026-01-01T12:00:00Z", to:"2026-01-01T12:05:00Z"
@@ -131,7 +144,8 @@ Do not add comments, scan-limit settings, secrets, full log content, or explanat
 - Confirm every hostname matches the environment URL for `DT_CONTEXT`.
 - For an exact trace, confirm the path contains `/ui/intent/dynatrace.distributedtracing/view-trace` and the decoded fragment contains the exact `trace.id` and bounded timeframe.
 - For Synthetic, confirm the path contains the chosen `/ui/intent/dynatrace.synthetic/` intent and the decoded fragment contains the exact monitor ID and bounded timeframe.
-- For a DQL table or graph, confirm the path is `/ui/apps/dynatrace.classic.logs.events/ui/logs-events`, decode and compare the exact multiline DQL, and confirm `visualizationType=table` or `barChart` as intended.
+- For log proof, confirm the path is `/ui/apps/dynatrace.classic.logs.events/ui/logs-events` with `advancedQueryMode=true` and `visualizationType=table`. Base64-decode the fragment, URL-decode the result, and compare it to the exact bounded log DQL.
+- For a Notebooks table or line chart, confirm the path is `/ui/intent/dynatrace.notebooks/view-query`. Decode the fragment as a URI component with percent-encoded spaces (`%20`), compare `dt.query` to the exact multiline DQL, and confirm the title, `visualization` (`table` or `lineChart`), and `visualizationSettings.autoSelectVisualization` (`false`).
 - For a graph, also confirm an explicit interval, native arrays, and no `scalar:true` or `summarize` stage.
 - Retain observed values as proof. A generated link makes them reproducible; the link alone does not prove the query returned data.
 

@@ -24,7 +24,7 @@ from common.parameters import (
     parse_timestamp,
     resolve_window,
 )
-from links.logs_events_graph_link import build_graph_link
+from links.notebook_link import build_link
 from queries.service_deployment import build_service_deployment_query
 from runners.service_rundown import (
     CommandRunner,
@@ -155,7 +155,12 @@ def execute_deployment_summary(
         lookback=lookback,
         interval=interval,
         observations=observations,
-        link=build_graph_link(environment_url, dql),
+        link=build_link(
+            environment_url,
+            dql,
+            title=f"[{environment}] {service} {version} requests per {interval} by region",
+            line_chart=True,
+        ),
     )
 
 
@@ -195,7 +200,7 @@ def render_markdown(summary: DeploymentSummary) -> str:
                 "",
             )
         )
-    lines.append(f"[Open the exact version timeline in Dynatrace]({summary.link})")
+    lines.append(f"[Open the exact version timeline in Dynatrace Notebooks]({summary.link})")
     return "\n".join(lines)
 
 
