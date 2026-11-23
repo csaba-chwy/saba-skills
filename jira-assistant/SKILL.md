@@ -56,5 +56,5 @@ description: "Read, search, summarize, create, update, and groom Jira work with 
 ## 6. Hand off to code, GitHub, and CI
 
 - Treat the approved Jira outcome and acceptance criteria as the implementation contract. If implementation reveals a material mismatch, propose a Jira update instead of silently changing scope.
-- Put the full Jira URL and a concise code/test mapping in Jira-backed pull requests. Link the PR back to Jira only within the approved write scope, preferring a remote link and otherwise one concise comment.
+- Put the full Jira URL and a concise code/test mapping in Jira-backed pull requests. Do not post PR links to Jira comments or create Jira remote links as part of PR delivery unless the user explicitly requests it.
 - Use GitHub checks as the CI index. For Jenkins failures, collect the run URL, failing stage, decisive error, and verification result before recommending changes. Do not infer completion from code presence, an open PR, or a green unit test alone.

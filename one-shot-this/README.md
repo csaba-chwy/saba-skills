@@ -24,12 +24,12 @@ The Codex command sandbox may not be able to reach `api.github.com`. This is sep
 ## Workflow
 
 1. Supply a Jira issue key.
-2. Review the generated repository plan and approve implementation, commits, push, draft PR, and Jira link-back.
+2. Review the generated repository plan and approve implementation, commits, push, and draft PR.
 3. For one repository, continue in the current session. For multiple repositories, create a worktree and Codex worker per repository.
 4. The current session or each worker implements its approved scope, runs the specified tests, and creates logical commits.
 5. Each implementation branch is pushed to `origin` with upstream tracking.
 6. If `gh auth status -h github.com` succeeds, open a draft PR against `${BASE_BRANCH:-main}` containing the full Jira URL, acceptance-criteria mapping, tests, observability, and rollout notes. Otherwise, report the already-pushed branch and the login command the user needs to run.
-7. Link the PR URL back to Jira, inspect GitHub checks, and use the Jenkins or bounded read-only Dynatrace skill when those systems hold the relevant evidence.
+7. Inspect GitHub checks, and use the Jenkins or bounded read-only Dynatrace skill when those systems hold the relevant evidence.
 
 The initial approval authorizes these actions. No second push/PR approval is requested unless the approved scope materially changes.
 
